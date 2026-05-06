@@ -24,13 +24,19 @@ export function LeagueTeamsSection({
   const existingNames = teams.map((t) => t.name);
 
   return (
-    <section className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+    <section className="space-y-4 rounded-2xl border border-line bg-ink-2 p-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-700">参加チーム</h2>
-        <span className="text-xs text-gray-400">{teams.length} チーム</span>
+        <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+          <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
+          参加チーム
+        </h2>
+        <span className="font-mono text-xs text-fg-3">
+          {teams.length}
+          <span className="text-fg-3/60">/2+</span>
+        </span>
       </div>
 
-      {teamsError && <p className="text-xs text-red-500">{teamsError}</p>}
+      {teamsError && <p className="text-xs text-rose-400">{teamsError}</p>}
 
       <TeamInputForm
         existingNames={existingNames}

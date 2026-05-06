@@ -17,7 +17,7 @@ const DEFAULT_COLORS = [
   "#3b82f6",
   "#8b5cf6",
   "#ec4899",
-  "#6b7280",
+  "#94a3b8",
 ];
 
 const MEMBER_EXAMPLES = ["アオリ", "ホタル", "ヒメ", "イイダ"];
@@ -60,16 +60,18 @@ export function TeamInputForm({ existingNames, onAdd, teamCnt }: Props) {
   };
 
   return (
-    <div className="bg-gray-50 rounded-xl border border-dashed border-gray-300 p-4 space-y-3">
-      <p className="text-sm font-medium text-gray-600">チームを追加</p>
+    <div className="space-y-3 rounded-xl border border-dashed border-line-2 bg-ink-1/50 p-4">
+      <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
+        + new.team
+      </p>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="space-y-1">
           <label
             htmlFor="team-name"
-            className="block text-xs font-medium text-gray-500"
+            className="block text-xs font-medium text-fg-2"
           >
-            チーム名 <span className="text-red-500">*</span>
+            チーム名 <span className="text-rose-400">*</span>
           </label>
           <input
             id="team-name"
@@ -79,15 +81,15 @@ export function TeamInputForm({ existingNames, onAdd, teamCnt }: Props) {
               setName(e.target.value);
               setNameError(null);
             }}
-            className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 bg-white outline-none transition focus:ring-2 focus:ring-indigo-400 ${
-              nameError ? "border-red-400" : "border-gray-300"
+            className={`w-full rounded-lg border bg-ink-1 px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-3 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60 focus:shadow-[0_0_22px_rgba(34,211,238,0.55),0_0_8px_rgba(34,211,238,0.4)] ${
+              nameError ? "border-rose-500" : "border-line-2"
             }`}
           />
-          {nameError && <p className="text-xs text-red-500">{nameError}</p>}
+          {nameError && <p className="text-xs text-rose-400">{nameError}</p>}
         </div>
 
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-gray-500">
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-fg-2">
             メンバー（{MEMBER_COUNT}人）
           </p>
           <div className="grid grid-cols-2 gap-2">
@@ -98,28 +100,31 @@ export function TeamInputForm({ existingNames, onAdd, teamCnt }: Props) {
                 value={memberName}
                 onChange={(e) => handleMemberNameChange(i, e.target.value)}
                 placeholder={MEMBER_EXAMPLES[i]}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white outline-none transition focus:ring-2 focus:ring-indigo-400"
+                className="w-full rounded-lg border border-line-2 bg-ink-1 px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-3 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60 focus:shadow-[0_0_22px_rgba(34,211,238,0.55),0_0_8px_rgba(34,211,238,0.4)]"
               />
             ))}
           </div>
         </div>
 
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-gray-500">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-fg-2">
             カラー
           </label>
-          <div className="flex flex-wrap gap-1.5 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             {DEFAULT_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setColor(c)}
-                className={`w-6 h-6 rounded-full transition ${
+                className={`h-7 w-7 rounded-full transition-all ${
                   color === c
-                    ? "ring-2 ring-offset-1 ring-gray-600 scale-110"
-                    : ""
+                    ? "scale-110 ring-2 ring-cyan-400 ring-offset-2 ring-offset-ink-1"
+                    : "opacity-70 hover:opacity-100"
                 }`}
-                style={{ backgroundColor: c }}
+                style={{
+                  backgroundColor: c,
+                  boxShadow: color === c ? `0 0 24px ${c}, 0 0 10px ${c}` : undefined,
+                }}
                 aria-label={c}
               />
             ))}
@@ -130,9 +135,9 @@ export function TeamInputForm({ existingNames, onAdd, teamCnt }: Props) {
       <button
         type="button"
         onClick={handleAdd}
-        className="w-full rounded-lg bg-indigo-500 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600 active:scale-95"
+        className="w-full rounded-lg border border-violet-500/50 bg-violet-500/10 py-2.5 text-sm font-bold text-violet-200 shadow-[0_0_18px_rgba(139,92,246,0.25)] transition hover:border-violet-400 hover:bg-violet-500/20 hover:shadow-[0_0_32px_rgba(139,92,246,0.65),0_0_12px_rgba(139,92,246,0.45)] active:scale-95"
       >
-        + 追加
+        + チームを追加
       </button>
     </div>
   );

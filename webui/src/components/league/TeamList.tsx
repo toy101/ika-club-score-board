@@ -12,9 +12,9 @@ type Props = {
 export function TeamList({ teams, onEdit, onDelete, onMoveUp, onMoveDown }: Props) {
   if (teams.length === 0) {
     return (
-      <p className="text-center text-sm text-gray-400 py-4">
-        チームがまだ追加されていません
-      </p>
+      <div className="rounded-xl border border-dashed border-line/60 bg-ink-1/40 py-6 text-center">
+        <p className="text-sm text-fg-3">チームがまだ追加されていません</p>
+      </div>
     );
   }
 

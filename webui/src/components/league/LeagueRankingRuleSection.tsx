@@ -27,15 +27,20 @@ export function LeagueRankingRuleSection({ rankingRule, onRankingRuleChange, err
   ];
 
   return (
-    <section className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
-      <h2 className="text-base font-semibold text-gray-700">順位ルール</h2>
+    <section className="space-y-4 rounded-2xl border border-line bg-ink-2 p-5">
+      <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+        <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
+        順位ルール
+      </h2>
 
       <div className="space-y-3">
-        <p className="text-sm text-gray-500">勝ち点</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
+          points
+        </p>
         <div className="grid grid-cols-3 gap-3">
           {pointFields.map(({ key, label }) => (
             <div key={key} className="space-y-1">
-              <label htmlFor={key} className="block text-xs font-medium text-gray-600">
+              <label htmlFor={key} className="block text-xs font-medium text-fg-2">
                 {label}
               </label>
               <input
@@ -44,19 +49,21 @@ export function LeagueRankingRuleSection({ rankingRule, onRankingRuleChange, err
                 min={0}
                 value={rankingRule[key]}
                 onChange={(e) => handlePointChange(key, e.target.value)}
-                className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 bg-white text-center outline-none transition focus:ring-2 focus:ring-indigo-400 ${
-                  errors[key] ? "border-red-400" : "border-gray-300"
+                className={`w-full rounded-lg border bg-ink-1 px-3 py-2 text-center font-mono text-sm font-bold text-fg outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60 focus:shadow-[0_0_22px_rgba(34,211,238,0.55),0_0_8px_rgba(34,211,238,0.4)] ${
+                  errors[key] ? "border-rose-500" : "border-line-2"
                 }`}
               />
-              {errors[key] && <p className="text-xs text-red-500">{errors[key]}</p>}
+              {errors[key] && <p className="text-xs text-rose-400">{errors[key]}</p>}
             </div>
           ))}
         </div>
       </div>
 
       <div className="space-y-1">
-        <p className="text-sm text-gray-500">タイブレーク判定</p>
-        <p className="text-xs text-gray-400">勝ち点 → 直接対決</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
+          tiebreaker
+        </p>
+        <p className="text-xs text-fg-2">勝ち点 → 直接対決</p>
       </div>
     </section>
   );

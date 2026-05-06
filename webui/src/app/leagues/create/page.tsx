@@ -131,14 +131,20 @@ export default function LeagueCreatePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
-      <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3">
-        <h1 className="text-base font-bold text-gray-800 text-center">リーグ作成</h1>
+    <div className="min-h-screen flex flex-col">
+      <header className="sticky top-0 z-20 bg-ink-0/80 backdrop-blur-md">
+        <div className="mx-auto max-w-lg px-4 py-4 text-center">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.4em] text-fg-3">
+            league.create
+          </p>
+          <h1 className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-base font-bold text-transparent">
+            リーグ作成
+          </h1>
+        </div>
+        <div className="h-px bg-gradient-to-r from-transparent via-violet-500/60 to-transparent" />
       </header>
 
-      {/* コンテンツ */}
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-4 pb-32">
+      <main className="mx-auto w-full max-w-lg space-y-4 px-4 py-6 pb-32">
         <LeagueBasicInfoSection
           name={name}
           onNameChange={setName}
@@ -160,19 +166,18 @@ export default function LeagueCreatePage() {
         />
       </main>
 
-      {/* フッターアクション */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3">
-        <div className="max-w-lg mx-auto space-y-2">
+      <footer className="fixed bottom-0 left-0 right-0 border-t border-line bg-ink-0/85 backdrop-blur-md">
+        <div className="mx-auto max-w-lg space-y-2 px-4 py-3">
           {apiError && (
-            <p className="text-sm text-red-500 text-center">{apiError}</p>
+            <p className="text-center text-sm text-rose-400">{apiError}</p>
           )}
           <button
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 active:scale-95 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            className="relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-500 py-3 text-sm font-bold tracking-wide text-white shadow-[0_0_44px_rgba(139,92,246,0.75),0_0_16px_rgba(217,70,239,0.55),0_0_8px_rgba(34,211,238,0.4)] transition-all hover:brightness-125 hover:shadow-[0_0_60px_rgba(139,92,246,0.95),0_0_24px_rgba(217,70,239,0.7),0_0_12px_rgba(34,211,238,0.55)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "送信中…" : "リーグを作成する"}
+            {loading ? "送信中…" : "リーグを作成"}
           </button>
         </div>
       </footer>
