@@ -1,0 +1,7 @@
+# oapi-codegen v2 configuration
+package: gen
+output: gen/api.gen.go
+generate:
+  models: true
+  strict-server: true
+  echo-server: true

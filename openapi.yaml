@@ -1,0 +1,572 @@
+openapi: "3.1.0"
+
+info:
+  title: Ika Club Score Board API
+  version: "1.0.0"
+  description: リーグ・チーム情報のCRUD API
+
+servers:
+  - url: http://localhost:8080
+    description: ローカル開発サーバー
+
+tags:
+  - name: leagues
+    description: リーグ操作
+  - name: teams
+    description: チーム操作（リーグ配下）
+  - name: matches
+    description: 対戦結果操作（リーグ配下）
+
+paths:
+  /leagues:
+    get:
+      tags: [leagues]
+      summary: リーグ一覧取得
+      operationId: listLeagues
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/League"
+
+    post:
+      tags: [leagues]
+      summary: リーグ作成
+      operationId: createLeague
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeagueCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /leagues/{leagueId}:
+    parameters:
+      - $ref: "#/components/parameters/LeagueId"
+
+    get:
+      tags: [leagues]
+      summary: リーグ取得
+      operationId: getLeague
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeagueDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [leagues]
+      summary: リーグ更新
+      operationId: updateLeague
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeagueUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/League"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [leagues]
+      summary: リーグ削除
+      operationId: deleteLeague
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/teams:
+    parameters:
+      - $ref: "#/components/parameters/LeagueId"
+
+    get:
+      tags: [teams]
+      summary: チーム一覧取得
+      operationId: listTeams
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      tags: [teams]
+      summary: チーム作成
+      operationId: createTeam
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /leagues/{leagueId}/teams/{teamId}:
+    parameters:
+      - $ref: "#/components/parameters/LeagueId"
+      - $ref: "#/components/parameters/TeamId"
+
+    get:
+      tags: [teams]
+      summary: チーム取得
+      operationId: getTeam
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [teams]
+      summary: チーム更新
+      operationId: updateTeam
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [teams]
+      summary: チーム削除
+      operationId: deleteTeam
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /leagues/{leagueId}/matches:
+    parameters:
+      - $ref: "#/components/parameters/LeagueId"
+
+    get:
+      tags: [matches]
+      summary: 対戦結果一覧取得
+      operationId: listMatches
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Match"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      tags: [matches]
+      summary: 対戦結果登録
+      operationId: createMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /leagues/{leagueId}/matches/{matchId}:
+    parameters:
+      - $ref: "#/components/parameters/LeagueId"
+      - $ref: "#/components/parameters/MatchId"
+
+    patch:
+      tags: [matches]
+      summary: 対戦結果更新
+      operationId: updateMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [matches]
+      summary: 対戦結果削除
+      operationId: deleteMatch
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    LeagueId:
+      name: leagueId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: リーグID
+
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: チームID
+
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: 対戦結果ID
+
+  schemas:
+    # ---------- 共通 ----------
+    Member:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: メンバー名
+          example: アオリ
+
+    RankingRule:
+      type: object
+      required: [pointsWin, pointsDraw, pointsLoss, tiebreakers]
+      properties:
+        pointsWin:
+          type: integer
+          minimum: 0
+          description: 勝利時の勝ち点
+          example: 3
+        pointsDraw:
+          type: integer
+          minimum: 0
+          description: 引分時の勝ち点
+          example: 1
+        pointsLoss:
+          type: integer
+          minimum: 0
+          description: 敗北時の勝ち点
+          example: 0
+        tiebreakers:
+          type: array
+          items:
+            type: string
+            enum: [head_to_head, goal_difference, goals_scored]
+          description: タイブレーク判定の優先順位（先頭が最優先）
+          example: [head_to_head]
+
+    # ---------- リーグ ----------
+    League:
+      type: object
+      required: [id, name, rankingRule]
+      properties:
+        id:
+          type: string
+          description: リーグID
+          example: league_01
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: リーグ名
+          example: 2024春季リーグ
+        rankingRule:
+          $ref: "#/components/schemas/RankingRule"
+
+    LeagueDetail:
+      allOf:
+        - $ref: "#/components/schemas/League"
+        - type: object
+          required: [teams]
+          properties:
+            teams:
+              type: array
+              items:
+                $ref: "#/components/schemas/Team"
+
+    LeagueCreateRequest:
+      type: object
+      required: [name, rankingRule, teams]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: リーグ名
+          example: 2024春季リーグ
+        rankingRule:
+          $ref: "#/components/schemas/RankingRule"
+        teams:
+          type: array
+          minItems: 2
+          description: 初期登録チーム（2件以上必須）
+          items:
+            $ref: "#/components/schemas/TeamCreateRequest"
+
+    LeagueUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: リーグ名
+          example: 2024春季リーグ（改）
+        rankingRule:
+          $ref: "#/components/schemas/RankingRule"
+
+    # ---------- チーム ----------
+    Team:
+      type: object
+      required: [id, name, color, sortOrder, members]
+      properties:
+        id:
+          type: string
+          description: チームID
+          example: team_01
+        name:
+          type: string
+          minLength: 1
+          description: チーム名
+          example: チーム1
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: チームカラー（16進数カラーコード）
+          example: "#ef4444"
+        sortOrder:
+          type: integer
+          minimum: 1
+          description: 表示順
+          example: 1
+        members:
+          type: array
+          minItems: 4
+          maxItems: 4
+          description: メンバー（固定4人）
+          items:
+            $ref: "#/components/schemas/Member"
+
+    TeamCreateRequest:
+      type: object
+      required: [name, color, members]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: チーム名
+          example: チーム1
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: チームカラー（16進数カラーコード）
+          example: "#ef4444"
+        members:
+          type: array
+          minItems: 4
+          maxItems: 4
+          description: メンバー（固定4人）
+          items:
+            $ref: "#/components/schemas/Member"
+
+    TeamUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: チーム名
+          example: チーム1（改）
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: チームカラー（16進数カラーコード）
+          example: "#3b82f6"
+        sortOrder:
+          type: integer
+          minimum: 1
+          description: 表示順
+          example: 2
+        members:
+          type: array
+          minItems: 4
+          maxItems: 4
+          description: メンバー（固定4人）
+          items:
+            $ref: "#/components/schemas/Member"
+
+    # ---------- 対戦結果 ----------
+    Match:
+      type: object
+      required: [id, homeTeamId, awayTeamId, homeScore, awayScore]
+      properties:
+        id:
+          type: string
+          description: 対戦結果ID
+        homeTeamId:
+          type: string
+          description: ホームチームID
+        awayTeamId:
+          type: string
+          description: アウェイチームID
+        homeScore:
+          type: integer
+          minimum: 0
+          description: ホームチームスコア
+        awayScore:
+          type: integer
+          minimum: 0
+          description: アウェイチームスコア
+
+    MatchCreateRequest:
+      type: object
+      required: [homeTeamId, awayTeamId, homeScore, awayScore]
+      properties:
+        homeTeamId:
+          type: string
+          description: ホームチームID
+        awayTeamId:
+          type: string
+          description: アウェイチームID
+        homeScore:
+          type: integer
+          minimum: 0
+          description: ホームチームスコア
+        awayScore:
+          type: integer
+          minimum: 0
+          description: アウェイチームスコア
+
+    MatchUpdateRequest:
+      type: object
+      properties:
+        homeScore:
+          type: integer
+          minimum: 0
+          description: ホームチームスコア
+        awayScore:
+          type: integer
+          minimum: 0
+          description: アウェイチームスコア
+
+    # ---------- エラー ----------
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: エラーメッセージ
+          example: リーグが見つかりません
+        details:
+          type: array
+          description: バリデーションエラーの詳細
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+                example: name
+              message:
+                type: string
+                example: 必須項目です
+
+  responses:
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    UnprocessableEntity:
+      description: Unprocessable Entity
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
