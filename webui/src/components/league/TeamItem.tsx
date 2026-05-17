@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Team } from "@/types/league";
+import { TeamColorDot } from "@/components/league/TeamColorDot";
 
 type Props = {
   team: Team;
@@ -46,10 +47,7 @@ export function TeamItem({ team, onEdit, onDelete, onMoveUp, onMoveDown, isFirst
   return (
     <>
       <div className="flex items-center gap-3 rounded-xl border border-line bg-ink-1 px-3 py-3 transition hover:border-violet-500/40">
-        <span
-          className="h-3 w-3 flex-shrink-0 rounded-full"
-          style={{ backgroundColor: team.color, boxShadow: `0 0 18px ${team.color}, 0 0 6px ${team.color}` }}
-        />
+        <TeamColorDot color={team.color} size="md" />
         <div className="flex-1 min-w-0">
           <p className="truncate text-sm font-bold text-fg">{team.name}</p>
           <p className="truncate text-xs text-fg-3">

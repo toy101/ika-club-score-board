@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getLeague } from "@/lib/api";
 import type { Team } from "@/types/league";
 import MatchMatrix from "@/components/league/MatchMatrix";
+import { TeamColorDot } from "@/components/league/TeamColorDot";
 
 type Props = {
   params: Promise<{ leagueId: string }>;
@@ -17,10 +18,7 @@ function TeamCard({ team }: { team: Team }) {
   return (
     <div className="space-y-3 rounded-2xl border border-line bg-ink-2 p-4">
       <div className="flex items-center gap-3">
-        <span
-          className="inline-block h-4 w-4 flex-shrink-0 rounded-full"
-          style={{ backgroundColor: team.color, boxShadow: `0 0 22px ${team.color}, 0 0 8px ${team.color}` }}
-        />
+        <TeamColorDot color={team.color} size="lg" />
         <span className="text-sm font-bold text-fg">{team.name}</span>
         <span className="ml-auto font-mono text-xs text-fg-3">#{team.sortOrder}</span>
       </div>

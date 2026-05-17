@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Match, Team } from "@/types/league";
+import { TeamColorDot } from "@/components/league/TeamColorDot";
 
 type Props = {
   homeTeam: Team;
@@ -231,13 +232,7 @@ function TeamCard({ label, team }: { label: string; team: Team }) {
       <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
         {label}
       </span>
-      <span
-        className="inline-block h-3 w-3 rounded-full"
-        style={{
-          backgroundColor: team.color,
-          boxShadow: `0 0 18px ${team.color}, 0 0 6px ${team.color}`,
-        }}
-      />
+      <TeamColorDot color={team.color} size="md" />
       <span className="w-full truncate text-center text-sm font-bold text-fg">
         {team.name}
       </span>

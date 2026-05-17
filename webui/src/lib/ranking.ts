@@ -1,4 +1,5 @@
 import type { Team, Match, RankingRule, Tiebreaker } from "@/types/league";
+import { getConfirmedPairs, type ConfirmedPair } from "@/lib/matches";
 
 export type TeamStats = {
   played: number;
@@ -16,46 +17,6 @@ export type RankedTeam = {
   stats: TeamStats;
   rank: number;
 };
-
-type ConfirmedPair = {
-  teamA: string;
-  teamB: string;
-  scoreA: number;
-  scoreB: number;
-};
-
-function getConfirmedPairs(teams: Team[], matches: Match[]): ConfirmedPair[] {
-  const matchMap = new Map<string, Match>();
-  for (const m of matches) {
-    matchMap.set(`${m.homeTeamId}:${m.awayTeamId}`, m);
-  }
-  const pairs: ConfirmedPair[] = [];
-  const seen = new Set<string>();
-  for (const t1 of teams) {
-    for (const t2 of teams) {
-      if (t1.id === t2.id) continue;
-      const key = [t1.id, t2.id].sort().join(":");
-      if (seen.has(key)) continue;
-      const m1 = matchMap.get(`${t1.id}:${t2.id}`);
-      const m2 = matchMap.get(`${t2.id}:${t1.id}`);
-      if (
-        m1 &&
-        m2 &&
-        m1.homeScore === m2.awayScore &&
-        m1.awayScore === m2.homeScore
-      ) {
-        seen.add(key);
-        pairs.push({
-          teamA: t1.id,
-          teamB: t2.id,
-          scoreA: m1.homeScore,
-          scoreB: m1.awayScore,
-        });
-      }
-    }
-  }
-  return pairs;
-}
 
 function emptyStats(): TeamStats {
   return {

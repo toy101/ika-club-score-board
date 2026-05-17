@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { Team, Match, RankingRule } from "@/types/league";
-import { listMatches, createMatch, updateMatch } from "@/lib/api";
+import { useState } from "react";
+import type { Team, RankingRule } from "@/types/league";
+import { createMatch, updateMatch } from "@/lib/api";
+import { buildMatchMap, getCellStatus, countMismatchedPairs } from "@/lib/matches";
+import { useMatches } from "./useMatches";
+import MatchCell from "./MatchCell";
+import { TeamColorDot } from "./TeamColorDot";
 import MatchInputModal from "./MatchInputModal";
 import RankingTable from "./RankingTable";
 
@@ -17,75 +21,14 @@ type EditingTarget = {
   awayTeam: Team;
 };
 
-type CellStatus =
-  | { kind: "empty" }
-  | { kind: "reported"; match: Match }
-  | { kind: "other_only"; otherMatch: Match }
-  | { kind: "confirmed"; match: Match }
-  | { kind: "mismatch"; match: Match; otherMatch: Match };
-
-function getCellStatus(
-  selfId: string,
-  opponentId: string,
-  matchMap: Map<string, Match>,
-): CellStatus {
-  const mine = matchMap.get(`${selfId}:${opponentId}`);
-  const theirs = matchMap.get(`${opponentId}:${selfId}`);
-
-  if (!mine && !theirs) return { kind: "empty" };
-  if (!mine) return { kind: "other_only", otherMatch: theirs! };
-  if (!theirs) return { kind: "reported", match: mine };
-
-  const confirmed =
-    mine.homeScore === theirs.awayScore && mine.awayScore === theirs.homeScore;
-  return confirmed
-    ? { kind: "confirmed", match: mine }
-    : { kind: "mismatch", match: mine, otherMatch: theirs };
-}
-
 export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const { matches, refetch } = useMatches(leagueId);
   const [editing, setEditing] = useState<EditingTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMatches = useCallback(async () => {
-    try {
-      const data = await listMatches(leagueId);
-      setMatches(data);
-    } catch {
-      // 失敗時は空のまま表示
-    }
-  }, [leagueId]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 初回ロード（leagueId 変化時の再フェッチ含む）
-    fetchMatches();
-  }, [fetchMatches]);
-
-  const matchMap = new Map<string, Match>();
-  for (const m of matches) {
-    matchMap.set(`${m.homeTeamId}:${m.awayTeamId}`, m);
-  }
-
-  const mismatchCount = (() => {
-    const seen = new Set<string>();
-    let count = 0;
-    for (const t1 of teams) {
-      for (const t2 of teams) {
-        if (t1.id >= t2.id) continue;
-        const status = getCellStatus(t1.id, t2.id, matchMap);
-        if (status.kind === "mismatch") {
-          const key = [t1.id, t2.id].sort().join(":");
-          if (!seen.has(key)) {
-            seen.add(key);
-            count++;
-          }
-        }
-      }
-    }
-    return count;
-  })();
+  const matchMap = buildMatchMap(matches);
+  const mismatchCount = countMismatchedPairs(teams, matchMap);
 
   function startEdit(homeTeam: Team, awayTeam: Team) {
     setError(null);
@@ -113,7 +56,7 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
           awayScore,
         });
       }
-      await fetchMatches();
+      await refetch();
       setEditing(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存に失敗したよ〜");
@@ -170,12 +113,10 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
                     key={t.id}
                     className="min-w-[80px] whitespace-nowrap border-b border-line bg-ink-3 p-2 text-center text-xs font-medium text-fg"
                   >
-                    <span
-                      className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
-                      style={{
-                        backgroundColor: t.color,
-                        boxShadow: `0 0 14px ${t.color}, 0 0 4px ${t.color}`,
-                      }}
+                    <TeamColorDot
+                      color={t.color}
+                      size="sm"
+                      className="mr-1 align-middle"
                     />
                     {t.name}
                   </th>
@@ -186,12 +127,10 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
               {teams.map((selfTeam) => (
                 <tr key={selfTeam.id} className="border-t border-line/50">
                   <td className="sticky left-0 z-10 whitespace-nowrap bg-ink-3 p-2 text-xs font-medium text-fg">
-                    <span
-                      className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
-                      style={{
-                        backgroundColor: selfTeam.color,
-                        boxShadow: `0 0 14px ${selfTeam.color}, 0 0 4px ${selfTeam.color}`,
-                      }}
+                    <TeamColorDot
+                      color={selfTeam.color}
+                      size="sm"
+                      className="mr-1 align-middle"
                     />
                     {selfTeam.name}
                   </td>
@@ -213,7 +152,7 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
                       matchMap,
                     );
                     return (
-                      <Cell
+                      <MatchCell
                         key={opponentTeam.id}
                         status={status}
                         onClick={() => startEdit(selfTeam, opponentTeam)}
@@ -245,97 +184,4 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
       )}
     </div>
   );
-}
-
-function Cell({
-  status,
-  onClick,
-}: {
-  status: CellStatus;
-  onClick: () => void;
-}) {
-  switch (status.kind) {
-    case "empty":
-      return (
-        <td
-          className="cursor-pointer p-2 text-center transition-colors hover:bg-violet-500/10"
-          onClick={onClick}
-        >
-          <span className="select-none text-xl leading-none text-fg-3/60">
-            +
-          </span>
-        </td>
-      );
-
-    case "other_only":
-      return (
-        <td
-          className="cursor-pointer p-2 text-center transition-colors hover:bg-amber-500/10"
-          onClick={onClick}
-          title="相手チームはすでに申告済み"
-        >
-          <span className="select-none text-xl leading-none text-amber-400">
-            +
-          </span>
-          <div className="mt-0.5 text-xs leading-tight text-amber-400/80">
-            要申告
-          </div>
-        </td>
-      );
-
-    case "reported":
-      return (
-        <td
-          className="cursor-pointer p-2 text-center transition-colors hover:bg-violet-500/10"
-          onClick={onClick}
-        >
-          <span className="font-mono text-sm font-bold text-fg">
-            {status.match.homeScore}
-            <span className="mx-0.5 text-fg-3">-</span>
-            {status.match.awayScore}
-          </span>
-          <div className="mt-0.5 text-xs leading-tight text-fg-3">
-            ⏳ 相手待ち
-          </div>
-        </td>
-      );
-
-    case "confirmed":
-      return (
-        <td
-          className="cursor-pointer p-2 text-center transition-colors hover:bg-emerald-500/10"
-          onClick={onClick}
-        >
-          <span className="font-mono text-sm font-bold text-fg">
-            {status.match.homeScore}
-            <span className="mx-0.5 text-fg-3">-</span>
-            {status.match.awayScore}
-          </span>
-          <div className="mt-0.5 text-xs leading-tight text-emerald-400">
-            ✓ 確定
-          </div>
-        </td>
-      );
-
-    case "mismatch": {
-      const theirClaimOfMySelf = status.otherMatch.awayScore;
-      const theirClaimOfOpponent = status.otherMatch.homeScore;
-      return (
-        <td
-          className="cursor-pointer border border-amber-500/50 bg-amber-500/5 p-2 text-center transition-colors hover:bg-amber-500/15"
-          onClick={onClick}
-          title={`相手の申告: ${theirClaimOfMySelf} - ${theirClaimOfOpponent}`}
-        >
-          <span className="font-mono text-sm font-bold text-fg">
-            {status.match.homeScore}
-            <span className="mx-0.5 text-fg-3">-</span>
-            {status.match.awayScore}
-          </span>
-          <div className="mt-0.5 text-xs leading-tight text-amber-400">
-            ⚠ 不一致
-          </div>
-        </td>
-      );
-    }
-  }
 }

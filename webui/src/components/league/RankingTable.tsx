@@ -2,6 +2,7 @@
 
 import type { Team, Match, RankingRule } from "@/types/league";
 import { rankTeams } from "@/lib/ranking";
+import { TeamColorDot } from "@/components/league/TeamColorDot";
 
 type Props = {
   teams: Team[];
@@ -50,13 +51,7 @@ export default function RankingTable({ teams, matches, rankingRule }: Props) {
                     {rank}
                   </td>
                   <td className="whitespace-nowrap p-2 text-left text-xs font-medium text-fg">
-                    <span
-                      className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
-                      style={{
-                        backgroundColor: team.color,
-                        boxShadow: `0 0 14px ${team.color}, 0 0 4px ${team.color}`,
-                      }}
-                    />
+                    <TeamColorDot color={team.color} size="sm" className="mr-1 align-middle" />
                     {team.name}
                   </td>
                   <Td>{stats.played}</Td>
