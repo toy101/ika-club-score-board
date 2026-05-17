@@ -40,6 +40,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export function listLeagues(): Promise<League[]> {
+  return request<League[]>("/leagues");
+}
+
 export function createLeague(payload: LeagueCreateRequest): Promise<League> {
   return request<League>("/leagues", {
     method: "POST",

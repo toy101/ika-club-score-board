@@ -21,7 +21,6 @@ const DEFAULT_COLORS = [
 export function TeamItem({ team, onEdit, onDelete, onMoveUp, onMoveDown, isFirst, isLast }: Props) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editName, setEditName] = useState(team.name);
   const [editColor, setEditColor] = useState(team.color);
   const [editMemberNames, setEditMemberNames] = useState<[string, string, string, string]>(
     [team.members[0].name, team.members[1].name, team.members[2].name, team.members[3].name]
@@ -34,14 +33,13 @@ export function TeamItem({ team, onEdit, onDelete, onMoveUp, onMoveDown, isFirst
   };
 
   const handleEditSave = () => {
-    if (!editName.trim()) return;
     const members: Team["members"] = [
       { name: editMemberNames[0] },
       { name: editMemberNames[1] },
       { name: editMemberNames[2] },
       { name: editMemberNames[3] },
     ];
-    onEdit({ ...team, name: editName.trim(), color: editColor, members });
+    onEdit({ ...team, color: editColor, members });
     setShowEditModal(false);
   };
 
@@ -133,15 +131,11 @@ export function TeamItem({ team, onEdit, onDelete, onMoveUp, onMoveDown, isFirst
             </h3>
             <div className="space-y-3">
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-fg-2">
-                  チーム名 <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full rounded-lg border border-line-2 bg-ink-1 px-3 py-2 text-sm text-fg outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60 focus:shadow-[0_0_22px_rgba(34,211,238,0.55),0_0_8px_rgba(34,211,238,0.4)]"
-                />
+                <p className="block text-xs font-medium text-fg-2">チーム名</p>
+                <div className="w-full rounded-lg border border-line-2 bg-ink-1/60 px-3 py-2 text-sm text-fg-2">
+                  {team.name}
+                  <span className="ml-2 text-[10px] text-fg-3">(自動)</span>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <p className="text-xs font-medium text-fg-2">メンバー（4人）</p>

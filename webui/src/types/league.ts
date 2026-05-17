@@ -20,7 +20,6 @@ export type Team = {
 };
 
 export type TeamInput = {
-  name: string;
   color: string;
   memberNames: [string, string, string, string];
 };

@@ -47,74 +47,85 @@ export default async function LeagueDetailPage({ params }: Props) {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-20 bg-ink-0/80 backdrop-blur-md">
-        <div className="mx-auto max-w-lg px-4 py-4 text-center">
+        <div className="mx-auto max-w-lg px-4 py-4 text-center lg:max-w-7xl lg:px-6 lg:py-5 lg:text-left">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.4em] text-fg-3">
             league.detail
           </p>
-          <h1 className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-base font-bold text-transparent">
+          <h1 className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-base font-bold text-transparent lg:text-xl">
             リーグ詳細
           </h1>
         </div>
         <div className="h-px bg-gradient-to-r from-transparent via-violet-500/60 to-transparent" />
       </header>
 
-      <main className="mx-auto w-full max-w-lg space-y-4 px-4 py-6">
-        {/* 基本情報 */}
-        <section className="space-y-1 rounded-2xl border border-line bg-ink-2 p-5">
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
-            league.name
-          </p>
-          <p className="text-xl font-bold text-fg">{league.name}</p>
-        </section>
-
-        {/* ランキングルール */}
-        <section className="space-y-4 rounded-2xl border border-line bg-ink-2 p-5">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
-            <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
-            ランキングルール
-          </h2>
-          <div className="grid grid-cols-3 gap-3">
-            {(
-              [
-                { label: "勝利", value: rankingRule.pointsWin, accent: "from-violet-500/25 to-fuchsia-500/15" },
-                { label: "引分", value: rankingRule.pointsDraw, accent: "from-cyan-500/25 to-violet-500/15" },
-                { label: "敗北", value: rankingRule.pointsLoss, accent: "from-rose-500/15 to-fuchsia-500/10" },
-              ] as const
-            ).map(({ label, value, accent }) => (
-              <div
-                key={label}
-                className={`relative overflow-hidden rounded-xl border border-line bg-gradient-to-br ${accent} py-3 text-center`}
-              >
-                <p className="mb-1 text-xs text-fg-2">{label}</p>
-                <p className="font-mono text-2xl font-bold text-fg">{value}</p>
-                <p className="text-[10px] text-fg-3">pt</p>
-              </div>
-            ))}
-          </div>
-          <div>
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
-              tiebreaker.priority
+      <main className="mx-auto w-full max-w-lg space-y-4 px-4 py-6 lg:max-w-7xl lg:space-y-6 lg:px-6 lg:py-8">
+        {/* 上段: リーグ名 + ランキングルール (PCでは横並び、モバイルは縦並び) */}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-stretch lg:gap-6">
+          {/* 基本情報 */}
+          <section className="flex flex-col justify-center space-y-1 rounded-2xl border border-line bg-ink-2 p-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
+              league.name
             </p>
-            <ol className="space-y-1.5">
-              {rankingRule.tiebreakers.map((tb, i) => (
-                <li
-                  key={tb}
-                  className="flex items-center gap-2 rounded-lg border border-line/60 bg-ink-1 px-3 py-2 text-sm text-fg-2"
-                >
-                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-violet-400/40 bg-violet-500/20 font-mono text-xs font-bold text-violet-200">
-                    {i + 1}
-                  </span>
-                  {TIEBREAKER_LABELS[tb] ?? tb}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
+            <p className="text-xl font-bold text-fg lg:text-2xl">{league.name}</p>
+          </section>
 
-        {/* 対戦結果マトリクス */}
-        <MatchMatrix leagueId={leagueId} teams={league.teams} />
+          {/* ランキングルール */}
+          <section className="space-y-4 rounded-2xl border border-line bg-ink-2 p-5">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
+              <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
+              ランキングルール
+            </h2>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+              <div className="grid grid-cols-3 gap-3">
+                {(
+                  [
+                    { label: "勝利", value: rankingRule.pointsWin, accent: "from-violet-500/25 to-fuchsia-500/15" },
+                    { label: "引分", value: rankingRule.pointsDraw, accent: "from-cyan-500/25 to-violet-500/15" },
+                    { label: "敗北", value: rankingRule.pointsLoss, accent: "from-rose-500/15 to-fuchsia-500/10" },
+                  ] as const
+                ).map(({ label, value, accent }) => (
+                  <div
+                    key={label}
+                    className={`relative overflow-hidden rounded-xl border border-line bg-gradient-to-br ${accent} py-3 text-center`}
+                  >
+                    <p className="mb-1 text-xs text-fg-2">{label}</p>
+                    <p className="font-mono text-2xl font-bold text-fg">{value}</p>
+                    <p className="text-[10px] text-fg-3">pt</p>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
+                  tiebreaker.priority
+                </p>
+                <ol className="space-y-1.5">
+                  {rankingRule.tiebreakers.map((tb, i) => (
+                    <li
+                      key={tb}
+                      className="flex items-center gap-2 rounded-lg border border-line/60 bg-ink-1 px-3 py-2 text-sm text-fg-2"
+                    >
+                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-violet-400/40 bg-violet-500/20 font-mono text-xs font-bold text-violet-200">
+                        {i + 1}
+                      </span>
+                      {TIEBREAKER_LABELS[tb] ?? tb}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          </section>
+        </div>
 
-        {/* チーム一覧 */}
+        {/* 中段: ランキング & 対戦結果マトリクス (横全幅) */}
+        <div className="min-w-0">
+          <MatchMatrix
+            leagueId={leagueId}
+            teams={league.teams}
+            rankingRule={rankingRule}
+          />
+        </div>
+
+        {/* 下段: チーム一覧 (Grid形式) */}
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 px-1 text-sm font-bold text-fg">
             <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
@@ -123,9 +134,11 @@ export default async function LeagueDetailPage({ params }: Props) {
               {league.teams.length}team
             </span>
           </h2>
-          {league.teams.map((team) => (
-            <TeamCard key={team.id} team={team} />
-          ))}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {league.teams.map((team) => (
+              <TeamCard key={team.id} team={team} />
+            ))}
+          </div>
         </section>
       </main>
     </div>
