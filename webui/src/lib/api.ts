@@ -1,6 +1,6 @@
 import type { League, LeagueDetail, Match, MatchCreateRequest, MatchUpdateRequest } from "@/types/league";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+const API_BASE = "/api";
 
 export type ApiError = {
   message: string;

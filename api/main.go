@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,11 @@ import (
 )
 
 func main() {
+	token := os.Getenv("API_AUTH_TOKEN")
+	if token == "" {
+		log.Fatal("API_AUTH_TOKEN is required")
+	}
+
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "ika.db"
@@ -30,15 +36,34 @@ func main() {
 		log.Fatalf("failed to seed: %v", err)
 	}
 
+	corsOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
+	if corsOrigin == "" {
+		corsOrigin = "http://localhost:3000"
+	}
+
 	e := echo.New()
 	e.HideBanner = true
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:3000"},
+		AllowOrigins: []string{corsOrigin},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete},
 	}))
+	e.Use(middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
+		KeyLookup:  "header:Authorization",
+		AuthScheme: "Bearer",
+		Skipper: func(c echo.Context) bool {
+			return c.Path() == "/healthz"
+		},
+		Validator: func(key string, c echo.Context) (bool, error) {
+			return subtle.ConstantTimeCompare([]byte(key), []byte(token)) == 1, nil
+		},
+	}))
+
+	e.GET("/healthz", func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
 
 	h := handler.New(db)
 	strictHandler := gen.NewStrictHandler(h, nil)
