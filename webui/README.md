@@ -18,7 +18,7 @@ WebUI はサーバ側 API プロキシ `/api/*` 経由で Go API へ転送する
 
 | Variable | Description |
 | --- | --- |
-| `API_BASE_URL` | Go API のベース URL（ローカルは `http://localhost:8080`、本番は Fly.io 公開 URL） |
+| `API_BASE_URL` | Go API のベース URL（ローカルは `http://localhost:8080`、本番は Render 公開 URL） |
 | `API_AUTH_TOKEN` | API へ `Authorization: Bearer <token>` で送る共有トークン。API 側の `API_AUTH_TOKEN` と一致させる |
 
 ブラウザは常に同一オリジンの `/api/*` のみを叩き、トークンはサーバ側で注入されクライアントには届かない。プロキシ実体は `src/app/api/[...path]/route.ts`（catch-all, force-dynamic）。

@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/labstack/echo/v4"
@@ -21,12 +22,21 @@ func main() {
 		log.Fatal("API_AUTH_TOKEN is required")
 	}
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "ika.db"
+	tursoURL := os.Getenv("TURSO_DATABASE_URL")
+	if tursoURL == "" {
+		log.Fatal("TURSO_DATABASE_URL is required")
+	}
+	tursoToken := os.Getenv("TURSO_AUTH_TOKEN")
+	// 認証トークンが必須なのはリモート Turso 接続時のみ。
+	// ローカルの `turso dev`（http:// / ws://）は無認証で動くため、
+	// その場合はトークン空を許容する。
+	if u, err := url.Parse(tursoURL); err != nil {
+		log.Fatalf("invalid TURSO_DATABASE_URL: %v", err)
+	} else if u.Scheme != "http" && u.Scheme != "ws" && tursoToken == "" {
+		log.Fatalf("TURSO_AUTH_TOKEN is required for %s:// connections", u.Scheme)
 	}
 
-	db, err := appdb.Open(dbPath)
+	db, err := appdb.Open(tursoURL, tursoToken)
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}

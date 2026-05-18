@@ -2,13 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-This is the **single authoritative doc** for the repo. The two `README.md` files (repo root and `webui/`) are **stale** — they predate the auth token, the WebUI→API proxy, and the Fly.io deploy. When anything disagrees, this file wins.
+This is the **single authoritative doc** for the repo. The two `README.md` files (repo root and `webui/`) are **stale** — they predate the auth token, the WebUI→API proxy, and the Turso/Render deploy. When anything disagrees, this file wins.
 
 ## Repo shape
 
 Two independent packages under one root, **no monorepo tooling** (no workspace, no shared lockfile):
 
-- `api/` — Go 1.25 + Echo v4 + SQLite (`mattn/go-sqlite3`, **cgo required**), server-side OpenAPI codegen
+- `api/` — Go 1.25 + Echo v4 + Turso/libSQL (`tursodatabase/libsql-client-go`, **pure Go, CGO not required**), server-side OpenAPI codegen
 - `webui/` — Next.js 16 (App Router) + React 19 + pnpm 10 + Tailwind v4
 - `openapi.yaml` (root) — the **single contract** between them
 - `plan/` — UI design specs; read these before editing the corresponding pages (`/plan` is gitignored)
@@ -21,13 +21,14 @@ Two independent packages under one root, **no monorepo tooling** (no workspace, 
 ```sh
 make generate                       # oapi-codegen → gen/api.gen.go (REQUIRED after openapi.yaml changes)
 make build                          # → bin/api
-API_AUTH_TOKEN=test make run        # go run . — FAILS FAST without API_AUTH_TOKEN
+API_AUTH_TOKEN=test TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... make run   # remote Turso
+# local libsql server (no auth): API_AUTH_TOKEN=test TURSO_DATABASE_URL=http://127.0.0.1:8080 make run  (run `turso dev` first)
 make tidy
 ```
 
-`API_AUTH_TOKEN` is **mandatory**: `main.go` calls `log.Fatal` at startup if it is empty, so a bare `make run` will not boot. `make generate` installs `oapi-codegen` v2.4.1 via `go install` every invocation (idempotent, needs network the first time).
+`API_AUTH_TOKEN` and `TURSO_DATABASE_URL` are **mandatory**: `main.go` calls `log.Fatal` at startup if either is empty. `TURSO_AUTH_TOKEN` is **conditionally required** — mandatory for remote schemes (`libsql://`, `https://`, `wss://`) but **may be empty** for a local `turso dev` server (`http://` / `ws://`, which is unauthenticated). There is no local SQLite-file mode; local dev means either remote Turso or `turso dev`. `make generate` installs `oapi-codegen` v2.4.1 via `go install` every invocation (idempotent, needs network the first time).
 
-API env vars: `API_AUTH_TOKEN` (required), `PORT` (default `8080`), `DB_PATH` (default `ika.db`), `CORS_ALLOWED_ORIGIN` (default `http://localhost:3000`), `SEED_TEST_DATA` (`if-empty` default / `force` / `off`).
+API env vars: `API_AUTH_TOKEN` (required), `TURSO_DATABASE_URL` (**required** — `libsql://...` URL; `main.go` `log.Fatal`s if empty), `TURSO_AUTH_TOKEN` (**required** — same), `PORT` (default `8080`), `CORS_ALLOWED_ORIGIN` (default `http://localhost:3000`), `SEED_TEST_DATA` (`if-empty` default / `force` / `off`). `DB_PATH` is **gone** — the API no longer opens a local file. For local dev you still need a Turso DB (or a libsql-compatible endpoint); there is no SQLite-file fallback.
 
 ### WebUI (run from `webui/`)
 
@@ -57,7 +58,7 @@ browser → /api/* (same-origin)
 
 - `webui/src/lib/api.ts` hardcodes `API_BASE = "/api"`. All client calls are same-origin.
 - The proxy route injects the bearer token server-side; the token never reaches the client. It forwards only `Authorization` + `Content-Type`, uses `cache: "no-store"`, and is intentionally minimal (no cookie/header passthrough). If you add a header the API needs, add it there.
-- Every Go route requires the bearer **except `/healthz`** (auth-skipped, used by Fly health checks).
+- Every Go route requires the bearer **except `/healthz`** (auth-skipped, used by the Render health check).
 - `CORS_ALLOWED_ORIGIN` still exists but is largely moot in the proxy flow (server-to-server fetch, not cross-origin). It only matters if something calls the API from a browser directly.
 
 ## OpenAPI codegen — the most important rule
@@ -81,11 +82,11 @@ Note: `webui/src/lib/matches.ts` and `webui/src/lib/ranking.ts` hold **domain lo
 
 ## API runtime architecture
 
-- Entry point: `api/main.go` — requires `API_AUTH_TOKEN`, opens SQLite, runs the seeder, wires Echo middleware (logger, recover, CORS, KeyAuth), registers `/healthz`, mounts the strict handler.
-- DB: `api/db/db.go` opens SQLite with `?_foreign_keys=on` and applies `schema.sql` (embedded via `//go:embed`) on every startup using `CREATE TABLE IF NOT EXISTS`. **There is no migration tool** — to evolve the schema edit `schema.sql` and either drop the DB file or write the ALTER manually; restart is required.
+- Entry point: `api/main.go` — requires `API_AUTH_TOKEN` and `TURSO_DATABASE_URL` (empty → `log.Fatal`); `TURSO_AUTH_TOKEN` is required only when the URL scheme is remote (`libsql`/`https`/`wss`) and may be empty for local `http`/`ws` (`turso dev`). Then opens the libSQL connection, runs the seeder, wires Echo middleware (logger, recover, CORS, KeyAuth), registers `/healthz`, mounts the strict handler.
+- DB: `api/db/db.go` opens Turso/libSQL via `libsql.NewConnector` + `WithAuthToken`, wrapped in a custom `fkConnector` that runs `PRAGMA foreign_keys = ON` on **every** new pooled connection (PRAGMA is per-connection — a one-shot `db.Exec` would only cover one connection in the pool), then applies `schema.sql` (embedded via `//go:embed`) on every startup using `CREATE TABLE IF NOT EXISTS`. **There is no migration tool** — to evolve the schema edit `schema.sql` and apply the ALTER manually against the Turso DB; restart is required. There is no local DB file to drop anymore.
 - Seeding: `api/db/seed.go` runs on every startup, governed by `SEED_TEST_DATA`. `if-empty` (default) seeds only when `leagues` is empty; `force` deletes the fixed test league (ID `00000000-0000-4000-a000-000000000001`, CASCADE) and reinserts; `off` does nothing. Seeds 4 teams × 4 members plus a deliberate mix of confirmed / pending / mismatched matches for UI testing.
 - Handler: `api/handler/handler.go` (~550 lines) holds raw `*sql.DB` and writes SQL inline (no ORM, no repository layer). Multi-row inserts (e.g. `CreateLeague`) use explicit `BeginTx` + `defer tx.Rollback()`.
-- IDs: leagues, teams, matches use `uuid.NewString()`; members use SQLite `INTEGER PRIMARY KEY AUTOINCREMENT`.
+- IDs: leagues, teams, matches use `uuid.NewString()`; members use libSQL/SQLite `INTEGER PRIMARY KEY AUTOINCREMENT`.
 - `tiebreakers` is stored as a JSON string in a `TEXT` column and (un)marshalled in scan helpers — keep the storage format consistent.
 - Cascade deletes: `teams.league_id`, `members.team_id`, and both `matches.*_team_id` use `ON DELETE CASCADE`. `matches` has `UNIQUE(league_id, home_team_id, away_team_id)` — one report per direction per league.
 
@@ -126,9 +127,11 @@ Enforced in `openapi.yaml` (and partly at runtime) — keep in mind when changin
 
 ## Deployment
 
-- `api/Dockerfile` — multi-stage: `golang:1.25` build with `CGO_ENABLED=1` (mandatory for `go-sqlite3`), runtime on `debian:bookworm-slim` + `ca-certificates`. Do **not** switch to `scratch`/Alpine without solving the cgo/glibc requirement.
-- `api/fly.toml` — Fly.io app `ika-club-score-board-api`, region `nrt`, persistent volume `ika_data` mounted at `/data` with `DB_PATH=/data/ika.db`, HTTPS-forced, health check `GET /healthz`. `API_AUTH_TOKEN` / `CORS_ALLOWED_ORIGIN` are set as Fly secrets, not in `fly.toml`.
-- The WebUI is deployed separately; in production its `API_BASE_URL` points at the Fly public URL and the browser still only ever sees same-origin `/api/*`.
+- `api/Dockerfile` — multi-stage: `golang:1.25` build with `CGO_ENABLED=0` (libsql-client-go is pure Go; CGO is no longer needed), runtime on `debian:bookworm-slim` + `ca-certificates`. Persistence is fully external (Turso), so the runtime image holds no data and `scratch`/Alpine is now viable if desired.
+- `api/render.yaml` — Render web service `ika-club-score-board-api`, `runtime: docker`, `dockerfilePath: ./api/Dockerfile`. `PORT=8080` and `SEED_TEST_DATA=if-empty` are in the file; `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `API_AUTH_TOKEN`, `CORS_ALLOWED_ORIGIN` are `sync: false` (set manually in the Render dashboard, never committed). Health check is `GET /healthz`.
+- Turso provides persistence (no Fly volume / no local file). The Turso DB is created out-of-band via the Turso CLI; its URL + token are pasted into the Render env vars.
+- `api/fly.toml` was **removed** — the Fly.io deploy is retired in favour of Render. Ignore any older docs that reference Fly.
+- The WebUI is deployed separately; in production its `API_BASE_URL` points at the Render public URL and the browser still only ever sees same-origin `/api/*`.
 
 ## Conventions in user's global config
 
