@@ -2,16 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-There is also a sibling `AGENTS.md` at the repo root with overlapping setup notes — prefer this file when guidance differs.
+This is the **single authoritative doc** for the repo. The two `README.md` files (repo root and `webui/`) are **stale** — they predate the auth token, the WebUI→API proxy, and the Fly.io deploy. When anything disagrees, this file wins.
 
 ## Repo shape
 
 Two independent packages under one root, **no monorepo tooling** (no workspace, no shared lockfile):
 
-- `api/` — Go 1.25 + Echo v4 + SQLite, server-side OpenAPI codegen
+- `api/` — Go 1.25 + Echo v4 + SQLite (`mattn/go-sqlite3`, **cgo required**), server-side OpenAPI codegen
 - `webui/` — Next.js 16 (App Router) + React 19 + pnpm 10 + Tailwind v4
 - `openapi.yaml` (root) — the **single contract** between them
-- `plan/` — UI design specs (e.g. `league_create_ui_spec.md`); read these before editing the corresponding pages
+- `plan/` — UI design specs; read these before editing the corresponding pages (`/plan` is gitignored)
 - No CI, no test suites, no formatter config exist anywhere in the repo
 
 ## Daily commands
@@ -19,72 +19,117 @@ Two independent packages under one root, **no monorepo tooling** (no workspace, 
 ### API (run from `api/`)
 
 ```sh
-make generate   # oapi-codegen → gen/api.gen.go (REQUIRED after openapi.yaml changes)
-make build      # → bin/api
-make run        # go run . (PORT=8080, DB_PATH=ika.db)
+make generate                       # oapi-codegen → gen/api.gen.go (REQUIRED after openapi.yaml changes)
+make build                          # → bin/api
+API_AUTH_TOKEN=test make run        # go run . — FAILS FAST without API_AUTH_TOKEN
 make tidy
 ```
 
-`make generate` installs `oapi-codegen` v2.4.1 via `go install` on every invocation — it is idempotent but needs network the first time.
+`API_AUTH_TOKEN` is **mandatory**: `main.go` calls `log.Fatal` at startup if it is empty, so a bare `make run` will not boot. `make generate` installs `oapi-codegen` v2.4.1 via `go install` every invocation (idempotent, needs network the first time).
+
+API env vars: `API_AUTH_TOKEN` (required), `PORT` (default `8080`), `DB_PATH` (default `ika.db`), `CORS_ALLOWED_ORIGIN` (default `http://localhost:3000`), `SEED_TEST_DATA` (`if-empty` default / `force` / `off`).
 
 ### WebUI (run from `webui/`)
 
 ```sh
-pnpm install    # .npmrc enforces shamefully-hoist=true — do not switch package managers
-pnpm dev        # http://localhost:3000
+pnpm install                                                  # .npmrc enforces shamefully-hoist=true — do not switch package managers
+API_BASE_URL=http://localhost:8080 API_AUTH_TOKEN=test pnpm dev   # http://localhost:3000
 pnpm build
-pnpm lint       # ESLint 9 (eslint-config-next, flat config)
+pnpm lint                                                     # ESLint 9 (eslint-config-next, flat config)
 ```
 
-`NEXT_PUBLIC_API_BASE_URL` overrides the API URL (default `http://localhost:8080`).
+The WebUI needs **server-only** `API_BASE_URL` and `API_AUTH_TOKEN` (the token must match the API's). These must **not** be prefixed `NEXT_PUBLIC_` — they must never reach the browser. `NEXT_PUBLIC_API_BASE_URL` is dead; ignore older docs that mention it.
 
 ### Running the stack
 
-CORS in `api/main.go` allows **only** `http://localhost:3000`. Both servers must be running for any end-to-end interaction.
+Both servers must run for any end-to-end interaction, and **both must share the same `API_AUTH_TOKEN`**. Seeded test league (always available with default seed mode): `http://localhost:3000/leagues/00000000-0000-4000-a000-000000000001`.
+
+## Auth & the WebUI→API proxy — read before touching API calls
+
+The browser **never** calls the Go API directly. The flow is:
+
+```
+browser → /api/* (same-origin)
+        → webui/src/app/api/[...path]/route.ts   (Next.js catch-all, force-dynamic, server-side)
+        → ${API_BASE_URL}/*  with  Authorization: Bearer ${API_AUTH_TOKEN}
+        → Echo KeyAuth middleware validates the bearer (constant-time compare)
+```
+
+- `webui/src/lib/api.ts` hardcodes `API_BASE = "/api"`. All client calls are same-origin.
+- The proxy route injects the bearer token server-side; the token never reaches the client. It forwards only `Authorization` + `Content-Type`, uses `cache: "no-store"`, and is intentionally minimal (no cookie/header passthrough). If you add a header the API needs, add it there.
+- Every Go route requires the bearer **except `/healthz`** (auth-skipped, used by Fly health checks).
+- `CORS_ALLOWED_ORIGIN` still exists but is largely moot in the proxy flow (server-to-server fetch, not cross-origin). It only matters if something calls the API from a browser directly.
 
 ## OpenAPI codegen — the most important rule
 
 `openapi.yaml` at the repo root is the source of truth. The flow is **asymmetric**:
 
-- **Server (Go)**: `api/gen/api.gen.go` is fully generated by `oapi-codegen` (config: `api/cfg/oapi-codegen.yaml`, mode: `strict-server` + `echo-server`). Never edit it. The `Handler` in `api/handler/handler.go` is asserted against the generated interface at compile time:
+- **Server (Go)**: `api/gen/api.gen.go` is fully generated by `oapi-codegen` (config: `api/cfg/oapi-codegen.yaml`, mode: `strict-server` + `echo-server`). Never edit it. `Handler` in `api/handler/handler.go` is asserted against the generated interface at compile time:
   ```go
   var _ gen.StrictServerInterface = (*Handler)(nil)
   ```
-  Adding/changing any operation in `openapi.yaml` will break this assertion until `Handler` gains the matching method.
+  Adding/changing any operation in `openapi.yaml` breaks this assertion until `Handler` gains the matching method.
 - **Client (TS)**: there is **no** client codegen. `webui/src/lib/api.ts` and `webui/src/types/league.ts` are hand-written and must be kept in sync with the spec manually.
 
-After editing `openapi.yaml`, the full update sequence is:
+After editing `openapi.yaml`:
 
 1. `cd api && make generate`
 2. Update `api/handler/handler.go` to satisfy any new/changed strict-server methods
 3. Manually mirror the change in `webui/src/lib/api.ts` and `webui/src/types/league.ts`
 
+Note: `webui/src/lib/matches.ts` and `webui/src/lib/ranking.ts` hold **domain logic that exists only on the client** and is not described by the spec at all (see "self-reported match model" below) — the spec round-trips raw match rows, nothing more.
+
 ## API runtime architecture
 
-- Entry point: `api/main.go` — opens SQLite, wires Echo middleware (logger, recover, CORS), mounts the strict handler.
-- DB: `api/db/db.go` opens SQLite with `?_foreign_keys=on` and applies `schema.sql` (embedded via `//go:embed`) on every startup using `CREATE TABLE IF NOT EXISTS`. **There is no migration tool** — to evolve the schema you must edit `schema.sql` and either drop the DB file or write the ALTER manually; restart is required.
-- Handler: `api/handler/handler.go` holds raw `*sql.DB` and writes SQL inline (no ORM, no repository layer). Multi-row inserts (e.g. `CreateLeague`) use an explicit `BeginTx` + `defer tx.Rollback()` pattern.
-- IDs: leagues and teams use `uuid.NewString()`; members use SQLite `INTEGER PRIMARY KEY AUTOINCREMENT`.
-- The `tiebreakers` array is stored as a JSON string in a `TEXT` column and (un)marshalled in scan helpers — keep the storage format consistent if you add fields.
-- Cascade deletes: `teams.league_id` and `members.team_id` use `ON DELETE CASCADE`, so deleting a league wipes its teams and members in one statement.
+- Entry point: `api/main.go` — requires `API_AUTH_TOKEN`, opens SQLite, runs the seeder, wires Echo middleware (logger, recover, CORS, KeyAuth), registers `/healthz`, mounts the strict handler.
+- DB: `api/db/db.go` opens SQLite with `?_foreign_keys=on` and applies `schema.sql` (embedded via `//go:embed`) on every startup using `CREATE TABLE IF NOT EXISTS`. **There is no migration tool** — to evolve the schema edit `schema.sql` and either drop the DB file or write the ALTER manually; restart is required.
+- Seeding: `api/db/seed.go` runs on every startup, governed by `SEED_TEST_DATA`. `if-empty` (default) seeds only when `leagues` is empty; `force` deletes the fixed test league (ID `00000000-0000-4000-a000-000000000001`, CASCADE) and reinserts; `off` does nothing. Seeds 4 teams × 4 members plus a deliberate mix of confirmed / pending / mismatched matches for UI testing.
+- Handler: `api/handler/handler.go` (~550 lines) holds raw `*sql.DB` and writes SQL inline (no ORM, no repository layer). Multi-row inserts (e.g. `CreateLeague`) use explicit `BeginTx` + `defer tx.Rollback()`.
+- IDs: leagues, teams, matches use `uuid.NewString()`; members use SQLite `INTEGER PRIMARY KEY AUTOINCREMENT`.
+- `tiebreakers` is stored as a JSON string in a `TEXT` column and (un)marshalled in scan helpers — keep the storage format consistent.
+- Cascade deletes: `teams.league_id`, `members.team_id`, and both `matches.*_team_id` use `ON DELETE CASCADE`. `matches` has `UNIQUE(league_id, home_team_id, away_team_id)` — one report per direction per league.
 
 ## WebUI architecture
 
-- App Router under `webui/src/app/`. The functional surface today is `/leagues/create` (`page.tsx`) — a single client component that owns all form state, validation, and the submit-to-API call. Section components live in `webui/src/components/league/` and are presentational.
-- Path alias `@/*` → `./src/*` (configured in `tsconfig.json`).
-- All API calls go through `webui/src/lib/api.ts`; types come from `webui/src/types/league.ts`. These two files are the manual mirror of `openapi.yaml` (see codegen section).
+- App Router under `webui/src/app/`. Routes: `/` (home), `/leagues` (list), `/leagues/create` (form), `/leagues/[leagueId]` (detail — the primary surface, renders the match matrix + standings).
+- Server vs client split matters: `/leagues/[leagueId]/page.tsx` is an **async Server Component** that calls `getLeague` directly (so its fetch goes proxy → API server-side, `notFound()` on failure). The create form and `MatchMatrix`/`MatchInputModal` are `"use client"`; client match data flows through the `useMatches` hook (fetch + `refetch`).
+- Presentational section components live in `webui/src/components/league/`. Path alias `@/*` → `./src/*`.
+- All API calls go through `webui/src/lib/api.ts`; types in `webui/src/types/league.ts`. These mirror `openapi.yaml` by hand.
+- **Standings are computed entirely in the browser** (`webui/src/lib/ranking.ts`) — there is no standings endpoint. It does recursive tiebreaker group-splitting: sort by points, then within each tied group apply `tiebreakers` in order (`head_to_head` is scored only among the tied group), ties share a rank. It ranks **only confirmed pairs**.
 - Styling: Tailwind v4 via `@tailwindcss/postcss`. No component library.
+
+## The self-reported match model — critical, not in the spec
+
+A `matches` row is **one team's self-report of one fixture**, not a neutral result:
+
+- `homeTeamId` = the reporting team, `awayTeamId` = the opponent; `homeScore`/`awayScore` = the reporter's own/opponent score *from its own perspective*.
+- A fixture therefore has up to **two** rows (one per direction). The API stores them raw and does **zero** reconciliation.
+- Reconciliation is client-side only, in `webui/src/lib/matches.ts` (`getCellStatus`). A pair's status:
+  - `confirmed` — both directions exist and mirror exactly (`mine.home===theirs.away && mine.away===theirs.home`)
+  - `mismatch` (⚠) — both exist but are not mirror-symmetric
+  - `reported` — only this team reported (awaiting opponent)
+  - `other_only` / `empty` — opponent-only / nothing
+- **Only `confirmed` pairs feed the ranking.** Mismatched/pending pairs are surfaced in the UI but excluded from standings.
+
+Any change to match endpoints, scoring, or standings must preserve this two-row symmetric-confirmation model. It is invisible in `openapi.yaml`, so do not infer the model from the spec.
 
 ## Domain invariants worth knowing
 
-These are enforced in `openapi.yaml` — keep them in mind when changing schemas, validators, or fixtures:
+Enforced in `openapi.yaml` (and partly at runtime) — keep in mind when changing schemas, validators, or fixtures:
 
-- A team has **exactly 4 members** (`minItems: 4, maxItems: 4`). The TS type encodes this as a 4-tuple `[Member, Member, Member, Member]`.
-- A league must be created with **at least 2 teams** (`teams.minItems: 2`). The handler enforces this at runtime in `CreateLeague`.
-- Team color is `^#[0-9a-fA-F]{6}$`.
-- `tiebreakers` enum: `head_to_head | goal_difference | goals_scored` (order = priority, first wins).
-- League name `1..50` chars; ranking-rule points are non-negative integers.
+- A team has **exactly 4 members** (`minItems: 4, maxItems: 4`); the TS type encodes a 4-tuple `[Member, Member, Member, Member]`.
+- A league is created with **at least 2 teams** (`teams.minItems: 2`); the handler also enforces this at runtime in `CreateLeague`.
+- Team color matches `^#[0-9a-fA-F]{6}$`; `sortOrder` is the display order (≥ 1).
+- `tiebreakers` enum: `head_to_head | goal_difference | goals_scored` (array order = priority, first wins).
+- League name `1..50` chars; ranking-rule points and match scores are non-negative integers.
+- One match report per `(league, homeTeam, awayTeam)` (DB `UNIQUE`); see the self-reported model above for how pairs resolve.
+
+## Deployment
+
+- `api/Dockerfile` — multi-stage: `golang:1.25` build with `CGO_ENABLED=1` (mandatory for `go-sqlite3`), runtime on `debian:bookworm-slim` + `ca-certificates`. Do **not** switch to `scratch`/Alpine without solving the cgo/glibc requirement.
+- `api/fly.toml` — Fly.io app `ika-club-score-board-api`, region `nrt`, persistent volume `ika_data` mounted at `/data` with `DB_PATH=/data/ika.db`, HTTPS-forced, health check `GET /healthz`. `API_AUTH_TOKEN` / `CORS_ALLOWED_ORIGIN` are set as Fly secrets, not in `fly.toml`.
+- The WebUI is deployed separately; in production its `API_BASE_URL` points at the Fly public URL and the browser still only ever sees same-origin `/api/*`.
 
 ## Conventions in user's global config
 
-The user's global CLAUDE.md (loaded automatically) requires final user-facing replies in Japanese with a specific persona ("YachiyoStyle"). Code, comments, commit messages, and this file stay in their natural language — that rule targets the chat output only.
+The user's global CLAUDE.md (loaded automatically) requires final user-facing chat replies in Japanese with a specific persona ("YachiyoStyle"). Code, comments, commit messages, and this file stay in their natural language — that rule targets chat output only.

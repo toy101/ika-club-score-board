@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# webui
 
-## Getting Started
+`ika-club-score-board` のフロントエンド。Next.js 16 (App Router) + React 19 + Tailwind v4。
 
-First, run the development server:
+> リポジトリ全体の正典は [`../CLAUDE.md`](../CLAUDE.md)。アーキテクチャ・認証プロキシ・ドメインモデルはそちらを参照。
+
+## パッケージマネージャ
+
+**pnpm 固定**（`pnpm@10.21.0`）。`.npmrc` が `shamefully-hoist=true` を強制しているため、npm / yarn に切り替えないこと。
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+WebUI はサーバ側 API プロキシ `/api/*` 経由で Go API へ転送する。以下は**サーバ専用**の環境変数で、**`NEXT_PUBLIC_` を付けてはいけない**（ブラウザに露出させない）：
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Description |
+| --- | --- |
+| `API_BASE_URL` | Go API のベース URL（ローカルは `http://localhost:8080`、本番は Fly.io 公開 URL） |
+| `API_AUTH_TOKEN` | API へ `Authorization: Bearer <token>` で送る共有トークン。API 側の `API_AUTH_TOKEN` と一致させる |
 
-## Learn More
+ブラウザは常に同一オリジンの `/api/*` のみを叩き、トークンはサーバ側で注入されクライアントには届かない。プロキシ実体は `src/app/api/[...path]/route.ts`（catch-all, force-dynamic）。
 
-To learn more about Next.js, take a look at the following resources:
+## コマンド
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+API_BASE_URL=http://localhost:8080 API_AUTH_TOKEN=test pnpm dev   # http://localhost:3000
+pnpm build                                                        # 本番ビルド
+pnpm start                                                        # ビルド済みを起動
+pnpm lint                                                         # ESLint 9 (eslint-config-next, flat config)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+API サーバも同じ `API_AUTH_TOKEN` で並走させる必要がある（[`../README.md`](../README.md) 参照）。
 
-## Deploy on Vercel
+## 構成メモ
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- ルート: `/`（ホーム）, `/leagues`（一覧）, `/leagues/create`（作成フォーム）, `/leagues/[leagueId]`（詳細＝主画面、マッチ行列＋順位表）
+- `/leagues/[leagueId]/page.tsx` は async Server Component で `getLeague` を直接呼ぶ。作成フォームと `MatchMatrix`/`MatchInputModal` は `"use client"`
+- API 呼び出しは `src/lib/api.ts` に集約、型は `src/types/league.ts`。どちらも `openapi.yaml` を**手動同期**
+- 順位は**ブラウザ側で算出**（`src/lib/ranking.ts`）。マッチ突合ロジックは `src/lib/matches.ts`（自己申告マッチモデル、仕様には現れない）
+- パスエイリアス `@/*` → `./src/*`。スタイリングは Tailwind v4（コンポーネントライブラリなし）
