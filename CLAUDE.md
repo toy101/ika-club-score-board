@@ -47,19 +47,26 @@ Both servers must run for any end-to-end interaction, and **both must share the 
 
 ## Auth & the WebUI→API proxy — read before touching API calls
 
-The browser **never** calls the Go API directly. The flow is:
+The browser **never** calls the Go API directly. There are **two** paths depending on where `webui/src/lib/api.ts` `request()` runs:
 
 ```
+# Browser / Client Component
 browser → /api/* (same-origin)
         → webui/src/app/api/[...path]/route.ts   (Next.js catch-all, force-dynamic, server-side)
         → ${API_BASE_URL}/*  with  Authorization: Bearer ${API_AUTH_TOKEN}
-        → Echo KeyAuth middleware validates the bearer (constant-time compare)
+        → Echo KeyAuth middleware validates the bearer
+
+# Server Component (Node runtime, no DOM)
+Server Component → request() detects `typeof window === "undefined"`
+                 → ${API_BASE_URL}/*  with  Authorization: Bearer ${API_AUTH_TOKEN}  (direct, proxy bypassed)
+                 → Echo KeyAuth middleware validates the bearer
 ```
 
-- `webui/src/lib/api.ts` hardcodes `API_BASE = "/api"`. All client calls are same-origin.
-- The proxy route injects the bearer token server-side; the token never reaches the client. It forwards only `Authorization` + `Content-Type`, uses `cache: "no-store"`, and is intentionally minimal (no cookie/header passthrough). If you add a header the API needs, add it there.
+- `webui/src/lib/api.ts` `request()` branches on `typeof window`: server-side uses absolute `${API_BASE_URL}` + injects `Authorization` directly; browser-side uses relative `/api${path}` and lets the proxy inject the token. Both use `cache: "no-store"`.
+- Why the split: Node's `fetch` (undici) rejects relative URLs, so Server Components cannot go through the same-origin proxy — they would need an absolute URL to their own host anyway, so it's simpler to call Render directly and skip a hop. The token is server-only either way; nothing about this exposes it to the browser.
+- The proxy route (`webui/src/app/api/[...path]/route.ts`) forwards only `Authorization` + `Content-Type`, uses `cache: "no-store"`, and is intentionally minimal (no cookie/header passthrough). If you add a header the API needs, add it there **and** mirror it in the server-side branch of `request()`.
 - Every Go route requires the bearer **except `/healthz`** (auth-skipped, used by the Render health check).
-- `CORS_ALLOWED_ORIGIN` still exists but is largely moot in the proxy flow (server-to-server fetch, not cross-origin). It only matters if something calls the API from a browser directly.
+- `CORS_ALLOWED_ORIGIN` still exists but is largely moot — both paths are server-to-server, never a cross-origin browser fetch.
 
 ## OpenAPI codegen — the most important rule
 
@@ -93,7 +100,7 @@ Note: `webui/src/lib/matches.ts` and `webui/src/lib/ranking.ts` hold **domain lo
 ## WebUI architecture
 
 - App Router under `webui/src/app/`. Routes: `/` (home), `/leagues` (list), `/leagues/create` (form), `/leagues/[leagueId]` (detail — the primary surface, renders the match matrix + standings).
-- Server vs client split matters: `/leagues/[leagueId]/page.tsx` is an **async Server Component** that calls `getLeague` directly (so its fetch goes proxy → API server-side, `notFound()` on failure). The create form and `MatchMatrix`/`MatchInputModal` are `"use client"`; client match data flows through the `useMatches` hook (fetch + `refetch`).
+- Server vs client split matters: `/leagues/[leagueId]/page.tsx` is an **async Server Component** that calls `getLeague` directly — its fetch goes **direct to `${API_BASE_URL}`** (proxy bypassed; see Auth section), `notFound()` on failure. The create form and `MatchMatrix`/`MatchInputModal` are `"use client"`; client match data flows through the `useMatches` hook (fetch + `refetch`) via the same-origin proxy.
 - Presentational section components live in `webui/src/components/league/`. Path alias `@/*` → `./src/*`.
 - All API calls go through `webui/src/lib/api.ts`; types in `webui/src/types/league.ts`. These mirror `openapi.yaml` by hand.
 - **Standings are computed entirely in the browser** (`webui/src/lib/ranking.ts`) — there is no standings endpoint. It does recursive tiebreaker group-splitting: sort by points, then within each tied group apply `tiebreakers` in order (`head_to_head` is scored only among the tied group), ties share a rank. It ranks **only confirmed pairs**.

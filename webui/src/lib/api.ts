@@ -1,7 +1,5 @@
 import type { League, LeagueDetail, Match, MatchCreateRequest, MatchUpdateRequest } from "@/types/league";
 
-const API_BASE = "/api";
-
 export type ApiError = {
   message: string;
 };
@@ -24,9 +22,30 @@ type LeagueCreateRequest = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+  const isServer = typeof window === "undefined";
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+
+  let url: string;
+  if (isServer) {
+    const baseUrl = process.env.API_BASE_URL;
+    const token = process.env.API_AUTH_TOKEN;
+    if (!baseUrl || !token) {
+      throw new Error("API_BASE_URL / API_AUTH_TOKEN are not configured");
+    }
+    url = `${baseUrl}${path}`;
+    headers.Authorization = `Bearer ${token}`;
+  } else {
+    url = `/api${path}`;
+  }
+
+  const res = await fetch(url, {
+    cache: "no-store",
     ...init,
+    headers,
   });
 
   if (!res.ok) {
