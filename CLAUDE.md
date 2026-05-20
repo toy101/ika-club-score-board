@@ -1,145 +1,41 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは Claude Code（claude.ai/code）が本リポジトリで作業するときの**補助メモ**。
 
-This is the **single authoritative doc** for the repo. The two `README.md` files (repo root and `webui/`) are **stale** — they predate the auth token, the WebUI→API proxy, and the Turso/Render deploy. When anything disagrees, this file wins.
+**開発者向けの正典は [`README.md`](./README.md)**（フロント単体ガイドは [`webui/README.md`](./webui/README.md)）。Claude も新規セッションでは必ずまず README.md と `openapi.yaml` に当たること。本ファイルは「README.md だけだと Claude が踏み抜きやすい点」だけを補足する。
 
-## Repo shape
+## 出力規約（user global config 由来）
 
-Two independent packages under one root, **no monorepo tooling** (no workspace, no shared lockfile):
+- ユーザ向けの最終チャット応答は **日本語 + YachiyoStyle**（user global CLAUDE.md で定義）
+- **コード・コメント・コミットメッセージ・本リポジトリ内のドキュメント**は自然言語のまま（ペルソナを適用しない）
+- 思考は英語、ユーザ向け出力だけ日本語
 
-- `api/` — Go 1.25 + Echo v4 + Turso/libSQL (`tursodatabase/libsql-client-go`, **pure Go, CGO not required**), server-side OpenAPI codegen
-- `webui/` — Next.js 16 (App Router) + React 19 + pnpm 10 + Tailwind v4
-- `openapi.yaml` (root) — the **single contract** between them
-- `plan/` — UI design specs; read these before editing the corresponding pages (`/plan` is gitignored)
-- No CI, no test suites, no formatter config exist anywhere in the repo
+## 作業前にまず読む
 
-## Daily commands
+| 場面 | 一次資料 |
+|---|---|
+| 全体像・セットアップ・デプロイ | [`README.md`](./README.md) |
+| フロント単体の構造 | [`webui/README.md`](./webui/README.md) |
+| API のスキーマ・契約 | [`openapi.yaml`](./openapi.yaml) |
+| UI 設計（該当ページを編集する前に） | `plan/`（gitignore 対象、ローカルにある場合のみ） |
 
-### API (run from `api/`)
+## Claude が踏み抜きやすいポイント
 
-```sh
-make generate                       # oapi-codegen → gen/api.gen.go (REQUIRED after openapi.yaml changes)
-make build                          # → bin/api
-API_AUTH_TOKEN=test TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... make run   # remote Turso
-# local libsql server (no auth): API_AUTH_TOKEN=test TURSO_DATABASE_URL=http://127.0.0.1:8080 make run  (run `turso dev` first)
-make tidy
-```
+README.md にも書かれているが、変更を加える前に**特に**気をつけてほしい運用ルール：
 
-`API_AUTH_TOKEN` and `TURSO_DATABASE_URL` are **mandatory**: `main.go` calls `log.Fatal` at startup if either is empty. `TURSO_AUTH_TOKEN` is **conditionally required** — mandatory for remote schemes (`libsql://`, `https://`, `wss://`) but **may be empty** for a local `turso dev` server (`http://` / `ws://`, which is unauthenticated). There is no local SQLite-file mode; local dev means either remote Turso or `turso dev`. `make generate` installs `oapi-codegen` v2.4.1 via `go install` every invocation (idempotent, needs network the first time).
+1. **`openapi.yaml` を変更したら必ず `cd api && make generate`** を走らせ、続けて `api/handler/handler.go` を strict-server インターフェースに合わせて更新する。`Handler` は `var _ gen.StrictServerInterface = (*Handler)(nil)` でコンパイル時アサートされているため、手を抜くとビルドが落ちる
+2. **`api/gen/api.gen.go` は生成物。絶対に編集しない**
+3. **クライアント側の型は自動生成されない** — `webui/src/lib/api.ts` と `webui/src/types/league.ts` を `openapi.yaml` に合わせて手で同期する
+4. **自己申告マッチモデル（2 行・鏡対称突合）は spec に現れない** — `webui/src/lib/matches.ts` と `webui/src/lib/ranking.ts` を読まずに match 周りを推測で書かない
+5. **マイグレーションツールは存在しない** — スキーマ変更は `api/db/schema.sql` 編集 + Turso DB に手で ALTER + 再起動の運用。`schema.sql` は `CREATE TABLE IF NOT EXISTS` で適用されるため、既存テーブルの ALTER は反映されない
+6. **WebUI の `API_BASE_URL` / `API_AUTH_TOKEN` に `NEXT_PUBLIC_` を付けない** — サーバ専用、ブラウザに漏らさない
+7. **`api/main.go` は `API_AUTH_TOKEN` と `TURSO_DATABASE_URL` が空だと `log.Fatal`** — ローカル SQLite ファイルにフォールバックはしない
+8. **`api/fly.toml` は撤去済み** — 古い Fly.io 関連の指示や記述は無視する
 
-API env vars: `API_AUTH_TOKEN` (required), `TURSO_DATABASE_URL` (**required** — `libsql://...` URL; `main.go` `log.Fatal`s if empty), `TURSO_AUTH_TOKEN` (**required** — same), `PORT` (default `8080`), `CORS_ALLOWED_ORIGIN` (default `http://localhost:3000`), `SEED_TEST_DATA` (`if-empty` default / `force` / `off`). `DB_PATH` is **gone** — the API no longer opens a local file. For local dev you still need a Turso DB (or a libsql-compatible endpoint); there is no SQLite-file fallback.
+## 検査の優先順位
 
-### WebUI (run from `webui/`)
+コード調査が必要なときは serena-mcp-server を優先利用（user global CLAUDE.md の方針）。推測ではなく定義参照ベースで判断する。
 
-```sh
-pnpm install                                                  # .npmrc enforces shamefully-hoist=true — do not switch package managers
-API_BASE_URL=http://localhost:8080 API_AUTH_TOKEN=test pnpm dev   # http://localhost:3000
-pnpm build
-pnpm lint                                                     # ESLint 9 (eslint-config-next, flat config)
-```
+## 過去の文脈
 
-The WebUI needs **server-only** `API_BASE_URL` and `API_AUTH_TOKEN` (the token must match the API's). These must **not** be prefixed `NEXT_PUBLIC_` — they must never reach the browser. `NEXT_PUBLIC_API_BASE_URL` is dead; ignore older docs that mention it.
-
-### Running the stack
-
-Both servers must run for any end-to-end interaction, and **both must share the same `API_AUTH_TOKEN`**. Seeded test league (always available with default seed mode): `http://localhost:3000/leagues/00000000-0000-4000-a000-000000000001`.
-
-## Auth & the WebUI→API proxy — read before touching API calls
-
-The browser **never** calls the Go API directly. There are **two** paths depending on where `webui/src/lib/api.ts` `request()` runs:
-
-```
-# Browser / Client Component
-browser → /api/* (same-origin)
-        → webui/src/app/api/[...path]/route.ts   (Next.js catch-all, force-dynamic, server-side)
-        → ${API_BASE_URL}/*  with  Authorization: Bearer ${API_AUTH_TOKEN}
-        → Echo KeyAuth middleware validates the bearer
-
-# Server Component (Node runtime, no DOM)
-Server Component → request() detects `typeof window === "undefined"`
-                 → ${API_BASE_URL}/*  with  Authorization: Bearer ${API_AUTH_TOKEN}  (direct, proxy bypassed)
-                 → Echo KeyAuth middleware validates the bearer
-```
-
-- `webui/src/lib/api.ts` `request()` branches on `typeof window`: server-side uses absolute `${API_BASE_URL}` + injects `Authorization` directly; browser-side uses relative `/api${path}` and lets the proxy inject the token. Both use `cache: "no-store"`.
-- Why the split: Node's `fetch` (undici) rejects relative URLs, so Server Components cannot go through the same-origin proxy — they would need an absolute URL to their own host anyway, so it's simpler to call Render directly and skip a hop. The token is server-only either way; nothing about this exposes it to the browser.
-- The proxy route (`webui/src/app/api/[...path]/route.ts`) forwards only `Authorization` + `Content-Type`, uses `cache: "no-store"`, and is intentionally minimal (no cookie/header passthrough). If you add a header the API needs, add it there **and** mirror it in the server-side branch of `request()`.
-- Every Go route requires the bearer **except `/healthz`** (auth-skipped, used by the Render health check).
-- `CORS_ALLOWED_ORIGIN` still exists but is largely moot — both paths are server-to-server, never a cross-origin browser fetch.
-
-## OpenAPI codegen — the most important rule
-
-`openapi.yaml` at the repo root is the source of truth. The flow is **asymmetric**:
-
-- **Server (Go)**: `api/gen/api.gen.go` is fully generated by `oapi-codegen` (config: `api/cfg/oapi-codegen.yaml`, mode: `strict-server` + `echo-server`). Never edit it. `Handler` in `api/handler/handler.go` is asserted against the generated interface at compile time:
-  ```go
-  var _ gen.StrictServerInterface = (*Handler)(nil)
-  ```
-  Adding/changing any operation in `openapi.yaml` breaks this assertion until `Handler` gains the matching method.
-- **Client (TS)**: there is **no** client codegen. `webui/src/lib/api.ts` and `webui/src/types/league.ts` are hand-written and must be kept in sync with the spec manually.
-
-After editing `openapi.yaml`:
-
-1. `cd api && make generate`
-2. Update `api/handler/handler.go` to satisfy any new/changed strict-server methods
-3. Manually mirror the change in `webui/src/lib/api.ts` and `webui/src/types/league.ts`
-
-Note: `webui/src/lib/matches.ts` and `webui/src/lib/ranking.ts` hold **domain logic that exists only on the client** and is not described by the spec at all (see "self-reported match model" below) — the spec round-trips raw match rows, nothing more.
-
-## API runtime architecture
-
-- Entry point: `api/main.go` — requires `API_AUTH_TOKEN` and `TURSO_DATABASE_URL` (empty → `log.Fatal`); `TURSO_AUTH_TOKEN` is required only when the URL scheme is remote (`libsql`/`https`/`wss`) and may be empty for local `http`/`ws` (`turso dev`). Then opens the libSQL connection, runs the seeder, wires Echo middleware (logger, recover, CORS, KeyAuth), registers `/healthz`, mounts the strict handler.
-- DB: `api/db/db.go` opens Turso/libSQL via `libsql.NewConnector` + `WithAuthToken`, wrapped in a custom `fkConnector` that runs `PRAGMA foreign_keys = ON` on **every** new pooled connection (PRAGMA is per-connection — a one-shot `db.Exec` would only cover one connection in the pool), then applies `schema.sql` (embedded via `//go:embed`) on every startup using `CREATE TABLE IF NOT EXISTS`. **There is no migration tool** — to evolve the schema edit `schema.sql` and apply the ALTER manually against the Turso DB; restart is required. There is no local DB file to drop anymore.
-- Seeding: `api/db/seed.go` runs on every startup, governed by `SEED_TEST_DATA`. `if-empty` (default) seeds only when `leagues` is empty; `force` deletes the fixed test league (ID `00000000-0000-4000-a000-000000000001`, CASCADE) and reinserts; `off` does nothing. Seeds 4 teams × 4 members plus a deliberate mix of confirmed / pending / mismatched matches for UI testing.
-- Handler: `api/handler/handler.go` (~550 lines) holds raw `*sql.DB` and writes SQL inline (no ORM, no repository layer). Multi-row inserts (e.g. `CreateLeague`) use explicit `BeginTx` + `defer tx.Rollback()`.
-- IDs: leagues, teams, matches use `uuid.NewString()`; members use libSQL/SQLite `INTEGER PRIMARY KEY AUTOINCREMENT`.
-- `tiebreakers` is stored as a JSON string in a `TEXT` column and (un)marshalled in scan helpers — keep the storage format consistent.
-- Cascade deletes: `teams.league_id`, `members.team_id`, and both `matches.*_team_id` use `ON DELETE CASCADE`. `matches` has `UNIQUE(league_id, home_team_id, away_team_id)` — one report per direction per league.
-
-## WebUI architecture
-
-- App Router under `webui/src/app/`. Routes: `/` (home), `/leagues` (list), `/leagues/create` (form), `/leagues/[leagueId]` (detail — the primary surface, renders the match matrix + standings).
-- Server vs client split matters: `/leagues/[leagueId]/page.tsx` is an **async Server Component** that calls `getLeague` directly — its fetch goes **direct to `${API_BASE_URL}`** (proxy bypassed; see Auth section), `notFound()` on failure. The create form and `MatchMatrix`/`MatchInputModal` are `"use client"`; client match data flows through the `useMatches` hook (fetch + `refetch`) via the same-origin proxy.
-- Presentational section components live in `webui/src/components/league/`. Path alias `@/*` → `./src/*`.
-- All API calls go through `webui/src/lib/api.ts`; types in `webui/src/types/league.ts`. These mirror `openapi.yaml` by hand.
-- **Standings are computed entirely in the browser** (`webui/src/lib/ranking.ts`) — there is no standings endpoint. It does recursive tiebreaker group-splitting: sort by points, then within each tied group apply `tiebreakers` in order (`head_to_head` is scored only among the tied group), ties share a rank. It ranks **only confirmed pairs**.
-- Styling: Tailwind v4 via `@tailwindcss/postcss`. No component library.
-
-## The self-reported match model — critical, not in the spec
-
-A `matches` row is **one team's self-report of one fixture**, not a neutral result:
-
-- `homeTeamId` = the reporting team, `awayTeamId` = the opponent; `homeScore`/`awayScore` = the reporter's own/opponent score _from its own perspective_.
-- A fixture therefore has up to **two** rows (one per direction). The API stores them raw and does **zero** reconciliation.
-- Reconciliation is client-side only, in `webui/src/lib/matches.ts` (`getCellStatus`). A pair's status:
-  - `confirmed` — both directions exist and mirror exactly (`mine.home===theirs.away && mine.away===theirs.home`)
-  - `mismatch` (⚠) — both exist but are not mirror-symmetric
-  - `reported` — only this team reported (awaiting opponent)
-  - `other_only` / `empty` — opponent-only / nothing
-- **Only `confirmed` pairs feed the ranking.** Mismatched/pending pairs are surfaced in the UI but excluded from standings.
-
-Any change to match endpoints, scoring, or standings must preserve this two-row symmetric-confirmation model. It is invisible in `openapi.yaml`, so do not infer the model from the spec.
-
-## Domain invariants worth knowing
-
-Enforced in `openapi.yaml` (and partly at runtime) — keep in mind when changing schemas, validators, or fixtures:
-
-- A team has **exactly 4 members** (`minItems: 4, maxItems: 4`); the TS type encodes a 4-tuple `[Member, Member, Member, Member]`.
-- A league is created with **at least 2 teams** (`teams.minItems: 2`); the handler also enforces this at runtime in `CreateLeague`.
-- Team color matches `^#[0-9a-fA-F]{6}$`; `sortOrder` is the display order (≥ 1).
-- `tiebreakers` enum: `head_to_head | goal_difference | goals_scored` (array order = priority, first wins).
-- League name `1..50` chars; ranking-rule points and match scores are non-negative integers.
-- One match report per `(league, homeTeam, awayTeam)` (DB `UNIQUE`); see the self-reported model above for how pairs resolve.
-
-## Deployment
-
-- `api/Dockerfile` — multi-stage: `golang:1.25` build with `CGO_ENABLED=0` (libsql-client-go is pure Go; CGO is no longer needed), runtime on `debian:bookworm-slim` + `ca-certificates`. Persistence is fully external (Turso), so the runtime image holds no data and `scratch`/Alpine is now viable if desired.
-- `api/render.yaml` — Render web service `ika-club-score-board-api`, `runtime: docker`, `dockerfilePath: ./api/Dockerfile`. `PORT=8080` and `SEED_TEST_DATA=if-empty` are in the file; `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `API_AUTH_TOKEN`, `CORS_ALLOWED_ORIGIN` are `sync: false` (set manually in the Render dashboard, never committed). Health check is `GET /healthz`.
-- Turso provides persistence (no Fly volume / no local file). The Turso DB is created out-of-band via the Turso CLI; its URL + token are pasted into the Render env vars.
-- `api/fly.toml` was **removed** — the Fly.io deploy is retired in favour of Render. Ignore any older docs that reference Fly.
-- The WebUI is deployed separately; in production its `API_BASE_URL` points at the Render public URL and the browser still only ever sees same-origin `/api/*`.
-
-## Conventions in user's global config
-
-The user's global CLAUDE.md (loaded automatically) requires final user-facing chat replies in Japanese with a specific persona ("YachiyoStyle"). Code, comments, commit messages, and this file stay in their natural language — that rule targets chat output only.
+本ファイルは以前「single authoritative doc」だったが、現在は README.md に正典が移っている。historical な git log / blame で本ファイルの旧構成が出てきても、**現在の正典は README.md**であることを優先する。
