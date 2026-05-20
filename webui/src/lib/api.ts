@@ -1,4 +1,10 @@
-import type { League, LeagueDetail, Match, MatchCreateRequest, MatchUpdateRequest } from "@/types/league";
+import type {
+  League,
+  LeagueDetail,
+  Match,
+  MatchCreateRequest,
+  MatchUpdateRequest,
+} from "@/types/league";
 
 export type ApiError = {
   message: string;
@@ -78,14 +84,21 @@ export function listMatches(leagueId: string): Promise<Match[]> {
   return request<Match[]>(`/leagues/${leagueId}/matches`);
 }
 
-export function createMatch(leagueId: string, payload: MatchCreateRequest): Promise<Match> {
+export function createMatch(
+  leagueId: string,
+  payload: MatchCreateRequest,
+): Promise<Match> {
   return request<Match>(`/leagues/${leagueId}/matches`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function updateMatch(leagueId: string, matchId: string, payload: MatchUpdateRequest): Promise<Match> {
+export function updateMatch(
+  leagueId: string,
+  matchId: string,
+  payload: MatchUpdateRequest,
+): Promise<Match> {
   return request<Match>(`/leagues/${leagueId}/matches/${matchId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),

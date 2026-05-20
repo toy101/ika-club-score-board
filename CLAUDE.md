@@ -110,7 +110,7 @@ Note: `webui/src/lib/matches.ts` and `webui/src/lib/ranking.ts` hold **domain lo
 
 A `matches` row is **one team's self-report of one fixture**, not a neutral result:
 
-- `homeTeamId` = the reporting team, `awayTeamId` = the opponent; `homeScore`/`awayScore` = the reporter's own/opponent score *from its own perspective*.
+- `homeTeamId` = the reporting team, `awayTeamId` = the opponent; `homeScore`/`awayScore` = the reporter's own/opponent score _from its own perspective_.
 - A fixture therefore has up to **two** rows (one per direction). The API stores them raw and does **zero** reconciliation.
 - Reconciliation is client-side only, in `webui/src/lib/matches.ts` (`getCellStatus`). A pair's status:
   - `confirmed` — both directions exist and mirror exactly (`mine.home===theirs.away && mine.away===theirs.home`)
