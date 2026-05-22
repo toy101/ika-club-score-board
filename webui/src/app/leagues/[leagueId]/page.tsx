@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getLeague } from "@/lib/api";
 import type { Team } from "@/types/league";
 import MatchMatrix from "@/components/league/MatchMatrix";
+import ModeRoulette from "@/components/league/ModeRoulette";
 import { TeamColorDot } from "@/components/league/TeamColorDot";
 
 type Props = {
@@ -121,6 +122,11 @@ export default async function LeagueDetailPage({ params }: Props) {
             teams={league.teams}
             rankingRule={rankingRule}
           />
+        </div>
+
+        {/* ルールルーレット (スマホ表示のみ) */}
+        <div className="lg:hidden">
+          <ModeRoulette />
         </div>
 
         {/* 下段: チーム一覧 (Grid形式) */}
