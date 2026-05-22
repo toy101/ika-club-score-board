@@ -8,6 +8,7 @@ import { LeagueBasicInfoSection } from "@/components/league/LeagueBasicInfoSecti
 import { LeagueRankingRuleSection } from "@/components/league/LeagueRankingRuleSection";
 import { LeagueTeamsSection } from "@/components/league/LeagueTeamsSection";
 import { createLeague } from "@/lib/api";
+import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 
 let teamIdCounter = 1;
 
@@ -26,6 +27,7 @@ type FormErrors = {
 
 export default function LeagueCreatePage() {
   const router = useRouter();
+  const { startNavigating } = useNavigationLoading();
   const [name, setName] = useState("");
   const [rankingRule, setRankingRule] = useState<RankingRule>(DEFAULT_RANKING_RULE);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -140,6 +142,7 @@ export default function LeagueCreatePage() {
         rankingRule,
         teams: teams.map(({ name, color, members }) => ({ name, color, members })),
       });
+      startNavigating();
       router.push(`/leagues/${league.id}`);
     } catch (e) {
       setApiError(e instanceof Error ? e.message : "エラーが発生しました");
