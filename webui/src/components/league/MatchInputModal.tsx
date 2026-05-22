@@ -141,7 +141,7 @@ export default function MatchInputModal({
           >
             <p className="font-medium">
               {hasMismatch ? "⚠ " : ""}
-              相手の申告: {homeTeam.name} {otherClaimSelf} - {awayTeam.name}{" "}
+              相手の申告 {homeTeam.name}: {otherClaimSelf} - {awayTeam.name}:{" "}
               {otherClaimOpponent}
             </p>
             {hasMismatch && (

@@ -3,7 +3,11 @@
 import { useState } from "react";
 import type { Team, RankingRule } from "@/types/league";
 import { createMatch, updateMatch } from "@/lib/api";
-import { buildMatchMap, getCellStatus, countMismatchedPairs } from "@/lib/matches";
+import {
+  buildMatchMap,
+  getCellStatus,
+  countMismatchedPairs,
+} from "@/lib/matches";
 import { useMatches } from "./useMatches";
 import MatchCell from "./MatchCell";
 import { TeamColorDot } from "./TeamColorDot";
@@ -166,7 +170,7 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
         </div>
 
         <p className="px-1 text-xs text-fg-3">
-          セルをタップして自チームのスコアを申告。両チームの申告が一致したら確定するよ〜
+          セルをタップして対戦結果を申告。自チームと相手チームの申告が一致したら確定するよ〜
         </p>
       </section>
 
