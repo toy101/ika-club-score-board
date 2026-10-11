@@ -80,8 +80,11 @@ export function getLeague(leagueId: string): Promise<LeagueDetail> {
   return request<LeagueDetail>(`/leagues/${leagueId}`);
 }
 
-export function listMatches(leagueId: string): Promise<Match[]> {
-  return request<Match[]>(`/leagues/${leagueId}/matches`);
+export function listMatches(
+  leagueId: string,
+  signal?: AbortSignal,
+): Promise<Match[]> {
+  return request<Match[]>(`/leagues/${leagueId}/matches`, { signal });
 }
 
 export function createMatch(

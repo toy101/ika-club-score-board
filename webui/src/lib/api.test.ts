@@ -242,10 +242,12 @@ describe("api.ts — endpoint functions", () => {
     vi.stubGlobal("fetch", mockFetch);
 
     const { listMatches } = await import("@/lib/api");
-    await listMatches("league-1");
+    const controller = new AbortController();
+    await listMatches("league-1", controller.signal);
 
-    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/leagues/league-1/matches");
+    expect(init.signal).toBe(controller.signal);
   });
 
   it("createMatch — POST /leagues/:id/matches with body", async () => {
