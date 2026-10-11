@@ -26,7 +26,8 @@ type EditingTarget = {
 };
 
 export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
-  const { matches, refetch } = useMatches(leagueId);
+  const { matches, refreshing, lastUpdatedAt, refreshError, refetch } =
+    useMatches(leagueId);
   const [editing, setEditing] = useState<EditingTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +87,38 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
 
   return (
     <div className="space-y-6">
+      <div className="space-y-2 rounded-xl border border-line bg-ink-2 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div role="status" aria-live="polite" className="text-xs text-fg-3">
+            <p>{refreshing ? "結果を更新中…" : "結果・順位の更新"}</p>
+            <p className="mt-1">
+              最終更新：{lastUpdatedAt ? (
+                <time dateTime={lastUpdatedAt.toISOString()}>
+                  {lastUpdatedAt.toLocaleString("ja-JP")}
+                </time>
+              ) : (
+                "まだ取得できていません"
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={refreshing || saving}
+            className="rounded-lg border border-line-2 bg-ink-3/50 px-4 py-2 text-sm text-fg-2 transition hover:bg-ink-3 disabled:opacity-50"
+          >
+            結果を更新
+          </button>
+        </div>
+        <p className="text-xs text-fg-3">
+          タブ・ウィンドウに戻ると自動で更新します。
+        </p>
+        {refreshError && (
+          <p role="alert" className="text-xs text-rose-400">
+            {refreshError}
+          </p>
+        )}
+      </div>
       <RankingTable teams={teams} matches={matches} rankingRule={rankingRule} />
 
       <section className="space-y-3">
