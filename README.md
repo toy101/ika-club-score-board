@@ -2,7 +2,7 @@
 
 サークル内リーグ戦のスコアボードを管理する Web アプリ。Go + Turso/libSQL の API と Next.js の WebUI から成る。
 
-このリポジトリの**正典は本ファイル**。開発に必要な全容（アーキテクチャ／認証フロー／OpenAPI コード生成／ドメインモデル／デプロイ）はここに集約している。`CLAUDE.md` は Claude Code 向けの補助メモであり、開発者は README.md だけ読めば足りる。
+このリポジトリの**正典は本ファイル**。開発に必要な全容（アーキテクチャ／認証フロー／OpenAPI コード生成／ドメインモデル／デプロイ）はここに集約している。AI エージェント向けの作業ガイドは [`AGENTS.md`](./AGENTS.md) に集約している。
 
 ## 目次
 
@@ -255,6 +255,6 @@ make run   # 接続先 Turso DB に強制再投入（向け先の DB を壊す�
 
 - **このファイル（`README.md`）** — 開発者向けの正典。全容はここ
 - [`webui/README.md`](./webui/README.md) — フロントエンド単体で完結する開発ガイド
-- `CLAUDE.md` — Claude Code が AI で作業するときの補助メモ。開発者は読まなくてよい
+- [`AGENTS.md`](./AGENTS.md) — AI エージェント共通の作業ガイド。変更時の注意点と確認手順
 - `openapi.yaml` — API と WebUI の唯一の契約
 - `plan/` — UI 設計仕様（gitignore 対象）
