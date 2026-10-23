@@ -10,6 +10,7 @@ type UseMatchesResult = {
   lastUpdatedAt: Date | null;
   refreshError: string | null;
   refetch: () => Promise<void>;
+  applySavedMatch: (match: Match) => void;
 };
 
 export function useMatches(leagueId: string): UseMatchesResult {
@@ -18,6 +19,19 @@ export function useMatches(leagueId: string): UseMatchesResult {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
+
+  const applySavedMatch = useCallback((saved: Match) => {
+    // 保存前に開始した取得で、保存済みのスコアを巻き戻さない。
+    requestRef.current?.abort();
+    requestRef.current = null;
+    setRefreshing(false);
+    setMatches((current) => [
+      ...current.filter((match) =>
+        match.homeTeamId !== saved.homeTeamId ||
+        match.awayTeamId !== saved.awayTeamId),
+      saved,
+    ]);
+  }, []);
 
   const refetch = useCallback(async () => {
     // 保存後の再取得は、保存前に開始した取得より必ず新しくする。
@@ -66,5 +80,5 @@ export function useMatches(leagueId: string): UseMatchesResult {
     };
   }, [refetch]);
 
-  return { matches, refreshing, lastUpdatedAt, refreshError, refetch };
+  return { matches, refreshing, lastUpdatedAt, refreshError, refetch, applySavedMatch };
 }

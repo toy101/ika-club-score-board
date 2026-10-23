@@ -55,6 +55,7 @@ export default function MatchInputModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     if (selfScore < 0 || opponentScore < 0) {
       setLocalError("0以上の整数を入力してね〜");
       return;
@@ -88,7 +89,7 @@ export default function MatchInputModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="match-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
       onClick={(e) => {
         if (e.target === e.currentTarget && !saving) onCancel();
       }}
@@ -133,6 +134,7 @@ export default function MatchInputModal({
             <ScoreStepper
               label={`${homeTeam.name}のスコア`}
               value={selfScore}
+              disabled={saving}
               max={
                 getScoringMode(rankingRule) === "game_wins"
                   ? Math.ceil(getBestOf(rankingRule) / 2)
@@ -147,6 +149,7 @@ export default function MatchInputModal({
             <ScoreStepper
               label={`${awayTeam.name}のスコア`}
               value={opponentScore}
+              disabled={saving}
               max={
                 getScoringMode(rankingRule) === "game_wins"
                   ? Math.ceil(getBestOf(rankingRule) / 2)
@@ -213,21 +216,23 @@ function ScoreStepper({
   label,
   value,
   max,
+  disabled,
   onChange,
 }: {
   label: string;
   value: number;
   max?: number;
+  disabled: boolean;
   onChange: (value: number) => void;
 }) {
   const stepBtn =
-    "flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-lg border border-line-2 bg-ink-3/50 text-lg font-bold text-fg-2 transition hover:bg-ink-3 hover:text-fg active:scale-95 disabled:opacity-40 disabled:hover:bg-ink-3/50";
+    "flex h-11 w-full shrink-0 sm:h-9 sm:w-9 select-none items-center justify-center rounded-lg border border-line-2 bg-ink-3/50 text-lg font-bold text-fg-2 transition hover:bg-ink-3 hover:text-fg active:scale-95 disabled:opacity-40 disabled:hover:bg-ink-3/50";
   return (
-    <div className="flex items-center gap-2">
+    <div className="grid min-w-0 grid-cols-2 items-center gap-1.5 sm:flex sm:gap-2">
       <button
         type="button"
         onClick={() => onChange(Math.max(0, value - 1))}
-        disabled={value <= 0}
+        disabled={disabled || value <= 0}
         aria-label={`${label}を1減らす`}
         className={stepBtn}
       >
@@ -235,6 +240,8 @@ function ScoreStepper({
       </button>
       <input
         type="number"
+        disabled={disabled}
+        onFocus={(event) => event.currentTarget.select()}
         inputMode="numeric"
         min="0"
         max={max}
@@ -245,12 +252,12 @@ function ScoreStepper({
           onChange(max === undefined ? normalized : Math.min(max, normalized));
         }}
         aria-label={label}
-        className="w-full min-w-0 rounded-lg border border-line-2 bg-ink-1 px-1 py-2.5 text-center font-mono text-2xl font-bold text-fg outline-none transition-colors focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60 focus:shadow-[0_0_22px_rgba(34,211,238,0.55),0_0_8px_rgba(34,211,238,0.4)]"
+        className="order-first col-span-2 w-full min-w-0 rounded-lg border border-line-2 bg-ink-1 px-1 py-2.5 text-center font-mono text-2xl font-bold text-fg outline-none transition-colors focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60 focus:shadow-[0_0_22px_rgba(34,211,238,0.55),0_0_8px_rgba(34,211,238,0.4)] sm:order-none"
       />
       <button
         type="button"
         onClick={() => onChange(max === undefined ? value + 1 : Math.min(max, value + 1))}
-        disabled={max !== undefined && value >= max}
+        disabled={disabled || (max !== undefined && value >= max)}
         aria-label={`${label}を1増やす`}
         className={stepBtn}
       >
