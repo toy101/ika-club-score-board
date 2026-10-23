@@ -1,6 +1,7 @@
 import type {
   League,
   LeagueDetail,
+  RankingRule,
   Match,
   MatchCreateRequest,
   MatchUpdateRequest,
@@ -18,13 +19,13 @@ type LeagueCreateRequestTeam = {
 
 type LeagueCreateRequest = {
   name: string;
-  rankingRule: {
-    pointsWin: number;
-    pointsDraw: number;
-    pointsLoss: number;
-    tiebreakers: string[];
-  };
+  rankingRule: RankingRule;
   teams: LeagueCreateRequestTeam[];
+};
+
+type LeagueUpdateRequest = {
+  name?: string;
+  rankingRule?: RankingRule;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -78,6 +79,16 @@ export function createLeague(payload: LeagueCreateRequest): Promise<League> {
 
 export function getLeague(leagueId: string): Promise<LeagueDetail> {
   return request<LeagueDetail>(`/leagues/${leagueId}`);
+}
+
+export function updateLeague(
+  leagueId: string,
+  payload: LeagueUpdateRequest,
+): Promise<League> {
+  return request<League>(`/leagues/${leagueId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listMatches(

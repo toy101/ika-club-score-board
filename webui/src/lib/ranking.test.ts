@@ -342,3 +342,56 @@ describe("rankTeams — shared ranks and skip numbering", () => {
     expect(rd.rank).toBe(4);
   });
 });
+
+describe("rankTeams — game wins", () => {
+  const gameRule = {
+    ...defaultRule,
+    scoringMode: "game_wins" as const,
+    bestOf: 3 as const,
+    pointsPerGameWin: 1,
+  };
+
+  it.each([
+    [3, 2, 0], [3, 2, 1], [3, 0, 2], [3, 1, 2],
+    [5, 3, 0], [5, 3, 1], [5, 3, 2],
+    [5, 0, 3], [5, 1, 3], [5, 2, 3],
+  ] as const)("BO%d result %d-%d awards each team's games", (bestOf, home, away) => {
+    const ranked = rankTeams([makeTeam(A), makeTeam(B)], confirmedMatch(A, B, home, away), { ...gameRule, bestOf });
+    expect(ranked.find(r => r.team.id === A)?.stats).toMatchObject({ points: home, goalsFor: home, played: 1 });
+    expect(ranked.find(r => r.team.id === B)?.stats).toMatchObject({ points: away, goalsFor: away, played: 1 });
+  });
+
+  it("multiplies games by configured points without series bonuses", () => {
+    const ranked = rankTeams([makeTeam(A), makeTeam(B)], confirmedMatch(A, B, 1, 2), { ...gameRule, pointsPerGameWin: 2 });
+    expect(ranked.find(r => r.team.id === A)?.stats).toMatchObject({ points: 2, losses: 1 });
+    expect(ranked.find(r => r.team.id === B)?.stats).toMatchObject({ points: 4, wins: 1 });
+  });
+
+  it("defaults each game to one point", () => {
+    const ranked = rankTeams([makeTeam(A), makeTeam(B)], confirmedMatch(A, B, 1, 2), { ...defaultRule, scoringMode: "game_wins" });
+    expect(ranked.find(r => r.team.id === A)?.stats.points).toBe(1);
+  });
+
+  it("excludes one-sided and mismatched reports", () => {
+    const matches = [makeMatch(A, B, 1, 2), makeMatch(A, C, 2, 1), makeMatch(C, A, 2, 0)];
+    const ranked = rankTeams([makeTeam(A), makeTeam(B), makeTeam(C)], matches, gameRule);
+    expect(ranked.every(r => r.stats.points === 0 && r.stats.played === 0)).toBe(true);
+  });
+
+  it("uses earned games in a tied group's direct encounters", () => {
+    // All earn five games; their head-to-head wins are equal but games differ.
+    const matches = [
+      ...confirmedMatch(A, B, 2, 1),
+      ...confirmedMatch(B, C, 2, 0),
+      ...confirmedMatch(C, A, 2, 1),
+      ...confirmedMatch(A, D, 2, 0),
+      ...confirmedMatch(B, D, 2, 0),
+      ...confirmedMatch(C, D, 2, 0),
+      ...confirmedMatch(C, "E", 1, 2),
+    ];
+    const ranked = rankTeams([makeTeam(A), makeTeam(B), makeTeam(C), makeTeam(D), makeTeam("E")], matches, { ...gameRule, tiebreakers: ["head_to_head"] });
+    expect(ranked.find(r => r.team.id === A)?.rank).toBe(1);
+    expect(ranked.find(r => r.team.id === B)?.rank).toBe(1);
+    expect(ranked.find(r => r.team.id === C)?.rank).toBe(3);
+  });
+});

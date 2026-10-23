@@ -106,8 +106,8 @@ func TestSeed_IfEmpty_OnEmptyDB(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM matches`).Scan(&matchCount); err != nil {
 		t.Fatalf("count matches: %v", err)
 	}
-	if matchCount != 8 {
-		t.Fatalf("expected 8 matches, got %d", matchCount)
+	if matchCount != 9 {
+		t.Fatalf("expected 9 matches, got %d", matchCount)
 	}
 }
 
@@ -195,7 +195,7 @@ func TestSeed_Force_ReplacesExisting(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM matches`).Scan(&matchCount); err != nil {
 		t.Fatalf("count matches: %v", err)
 	}
-	if matchCount != 8 {
-		t.Fatalf("expected 8 matches, got %d", matchCount)
+	if matchCount != 9 {
+		t.Fatalf("expected 9 matches, got %d", matchCount)
 	}
 }

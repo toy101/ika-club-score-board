@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { RankingRule } from "@/types/league";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -202,7 +203,7 @@ describe("api.ts — endpoint functions", () => {
   });
 
   it("createLeague — POST /leagues with body", async () => {
-    const payload = {
+    const payload: { name: string; rankingRule: RankingRule; teams: [] } = {
       name: "Test League",
       rankingRule: {
         pointsWin: 3,
@@ -235,6 +236,30 @@ describe("api.ts — endpoint functions", () => {
 
     const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/leagues/abc");
+  });
+
+  it("updateLeague — PATCH /leagues/:id with ranking rule", async () => {
+    const payload: { rankingRule: RankingRule } = {
+      rankingRule: {
+        pointsWin: 3,
+        pointsDraw: 1,
+        pointsLoss: 0,
+        tiebreakers: ["head_to_head"],
+        scoringMode: "game_wins",
+        bestOf: 5,
+        pointsPerGameWin: 2,
+      },
+    };
+    const mockFetch = makeMockFetch(makeFetchResponse(200, { id: "abc" }));
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { updateLeague } = await import("@/lib/api");
+    await updateLeague("abc", payload);
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/leagues/abc");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual(payload);
   });
 
   it("listMatches — GET /leagues/:id/matches", async () => {

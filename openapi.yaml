@@ -331,6 +331,21 @@ components:
           minimum: 0
           description: 敗北時の勝ち点
           example: 0
+        scoringMode:
+          type: string
+          enum: [match_points, game_wins]
+          default: match_points
+          description: 順位点の計算方式。match_points は対戦結果、game_wins は獲得本数で計算する
+        bestOf:
+          type: integer
+          enum: [3, 5]
+          default: 3
+          description: game_wins 方式で使用するシリーズ形式
+        pointsPerGameWin:
+          type: integer
+          minimum: 1
+          default: 1
+          description: game_wins 方式で獲得した1本あたりの順位点
         tiebreakers:
           type: array
           items:

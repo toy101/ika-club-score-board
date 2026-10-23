@@ -30,6 +30,19 @@ func makeLeagueBody(name string, teams []gen.TeamCreateRequest) *gen.LeagueCreat
 	}
 }
 
+func gameWinsRule(bestOf gen.RankingRuleBestOf, pointsPerGameWin int) gen.RankingRule {
+	mode := gen.GameWins
+	return gen.RankingRule{
+		BestOf:           &bestOf,
+		PointsDraw:       1,
+		PointsLoss:       0,
+		PointsPerGameWin: &pointsPerGameWin,
+		PointsWin:        3,
+		ScoringMode:      &mode,
+		Tiebreakers:      []gen.RankingRuleTiebreakers{gen.HeadToHead},
+	}
+}
+
 func makeTeamReqs(n int) []gen.TeamCreateRequest {
 	teams := make([]gen.TeamCreateRequest, n)
 	for i := range teams {
@@ -80,6 +93,11 @@ func TestListLeagues_Multiple(t *testing.T) {
 	}
 	if len(r) != 2 {
 		t.Fatalf("expected 2 leagues, got %d", len(r))
+	}
+	for _, league := range r {
+		if league.RankingRule.ScoringMode == nil || league.RankingRule.BestOf == nil || league.RankingRule.PointsPerGameWin == nil {
+			t.Fatalf("expected series-scoring settings in list response: %+v", league.RankingRule)
+		}
 	}
 }
 
@@ -143,6 +161,15 @@ func TestCreateLeague_Success(t *testing.T) {
 	if len(r.RankingRule.Tiebreakers) != 2 {
 		t.Fatalf("expected 2 tiebreakers, got %d", len(r.RankingRule.Tiebreakers))
 	}
+	if r.RankingRule.ScoringMode == nil || *r.RankingRule.ScoringMode != gen.MatchPoints {
+		t.Fatalf("expected default ScoringMode=match_points, got %v", r.RankingRule.ScoringMode)
+	}
+	if r.RankingRule.BestOf == nil || *r.RankingRule.BestOf != gen.N3 {
+		t.Fatalf("expected default BestOf=3, got %v", r.RankingRule.BestOf)
+	}
+	if r.RankingRule.PointsPerGameWin == nil || *r.RankingRule.PointsPerGameWin != 1 {
+		t.Fatalf("expected default PointsPerGameWin=1, got %v", r.RankingRule.PointsPerGameWin)
+	}
 
 	// Verify teams rows inserted with sort_order 1..N
 	var teamCount int
@@ -181,6 +208,21 @@ func TestCreateLeague_Success(t *testing.T) {
 	}
 }
 
+func TestCreateLeague_RejectsInvalidPointsPerGameWin(t *testing.T) {
+	h, _ := newTestHandler(t)
+	body := makeLeagueBody("League", makeTeamReqs(2))
+	invalid := 0
+	body.RankingRule.PointsPerGameWin = &invalid
+
+	resp, err := h.CreateLeague(context.Background(), gen.CreateLeagueRequestObject{Body: body})
+	if err != nil {
+		t.Fatalf("CreateLeague error: %v", err)
+	}
+	if _, ok := resp.(gen.CreateLeague422JSONResponse); !ok {
+		t.Fatalf("expected CreateLeague422JSONResponse, got %T", resp)
+	}
+}
+
 // ---------- GetLeague ----------
 
 func TestGetLeague_NotFound(t *testing.T) {
@@ -215,6 +257,12 @@ func TestGetLeague_Success(t *testing.T) {
 	}
 	if len(r.Teams) != 2 {
 		t.Fatalf("expected 2 teams, got %d", len(r.Teams))
+	}
+	if r.RankingRule.ScoringMode == nil || *r.RankingRule.ScoringMode != gen.MatchPoints {
+		t.Fatalf("expected ScoringMode=match_points, got %v", r.RankingRule.ScoringMode)
+	}
+	if r.RankingRule.BestOf == nil || *r.RankingRule.BestOf != gen.N3 {
+		t.Fatalf("expected BestOf=3, got %v", r.RankingRule.BestOf)
 	}
 	// Teams ordered by sort_order; each should have 4 members
 	for i, team := range r.Teams {
@@ -307,6 +355,54 @@ func TestUpdateLeague_RankingRuleOnly(t *testing.T) {
 	}
 }
 
+func TestUpdateLeague_RejectsFormatChangeAfterMatchReport(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	if _, err := db.Exec(
+		`INSERT INTO matches(id, league_id, home_team_id, away_team_id, home_score, away_score) VALUES(?,?,?,?,?,?)`,
+		"match-existing", testLeagueID, testTeamID1, testTeamID2, 2, 1,
+	); err != nil {
+		t.Fatalf("insert match: %v", err)
+	}
+	rule := gameWinsRule(gen.N3, 1)
+
+	resp, err := h.UpdateLeague(ctx, gen.UpdateLeagueRequestObject{
+		LeagueId: testLeagueID,
+		Body:     &gen.LeagueUpdateRequest{RankingRule: &rule},
+	})
+	if err != nil {
+		t.Fatalf("UpdateLeague error: %v", err)
+	}
+	if _, ok := resp.(gen.UpdateLeague422JSONResponse); !ok {
+		t.Fatalf("expected UpdateLeague422JSONResponse, got %T", resp)
+	}
+}
+
+func TestUpdateLeague_PersistsGameWinsSettings(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	rule := gameWinsRule(gen.N5, 2)
+
+	resp, err := h.UpdateLeague(ctx, gen.UpdateLeagueRequestObject{
+		LeagueId: testLeagueID,
+		Body:     &gen.LeagueUpdateRequest{RankingRule: &rule},
+	})
+	if err != nil {
+		t.Fatalf("UpdateLeague error: %v", err)
+	}
+	r, ok := resp.(gen.UpdateLeague200JSONResponse)
+	if !ok {
+		t.Fatalf("expected UpdateLeague200JSONResponse, got %T", resp)
+	}
+	if r.RankingRule.ScoringMode == nil || *r.RankingRule.ScoringMode != gen.GameWins ||
+		r.RankingRule.BestOf == nil || *r.RankingRule.BestOf != gen.N5 ||
+		r.RankingRule.PointsPerGameWin == nil || *r.RankingRule.PointsPerGameWin != 2 {
+		t.Fatalf("unexpected ranking rule: %+v", r.RankingRule)
+	}
+}
+
 // ---------- DeleteLeague ----------
 
 func TestDeleteLeague_NotFound(t *testing.T) {
@@ -372,5 +468,57 @@ func TestDeleteLeague_CascadeDeletes(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatal("expected matches to be cascade-deleted")
+	}
+}
+
+func TestValidateRankingRuleRejectsUnsupportedSettings(t *testing.T) {
+	for _, rule := range []gen.RankingRule{
+		{ScoringMode: ptr(gen.RankingRuleScoringMode("unsupported"))},
+		{BestOf: ptr(gen.RankingRuleBestOf(4))},
+		{PointsPerGameWin: ptr(-1)},
+	} {
+		if err := validateRankingRule(rule); err == nil {
+			t.Fatalf("expected invalid rule rejection: %+v", rule)
+		}
+	}
+}
+
+func TestUpdateLeague_GameWinsLocksFormatButAllowsPoints(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	if _, err := db.Exec(`UPDATE leagues SET scoring_mode='game_wins' WHERE id=?`, testLeagueID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO matches(id, league_id, home_team_id, away_team_id, home_score, away_score) VALUES(?,?,?,?,?,?)`,
+		"report", testLeagueID, testTeamID1, testTeamID2, 1, 2); err != nil {
+		t.Fatal(err)
+	}
+	changedFormat := gameWinsRule(gen.N5, 1)
+	resp, err := h.UpdateLeague(ctx, gen.UpdateLeagueRequestObject{
+		LeagueId: testLeagueID, Body: &gen.LeagueUpdateRequest{RankingRule: &changedFormat},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(gen.UpdateLeague422JSONResponse); !ok {
+		t.Fatalf("expected 422, got %T", resp)
+	}
+	changedPoints := gameWinsRule(gen.N3, 2)
+	resp, err = h.UpdateLeague(ctx, gen.UpdateLeagueRequestObject{
+		LeagueId: testLeagueID, Body: &gen.LeagueUpdateRequest{RankingRule: &changedPoints},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resp.(gen.UpdateLeague200JSONResponse); !ok {
+		t.Fatalf("expected 200, got %T", resp)
+	}
+	saved, err := h.fetchLeague(ctx, testLeagueID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *saved.RankingRule.BestOf != gen.N3 || *saved.RankingRule.PointsPerGameWin != 2 {
+		t.Fatalf("unexpected saved rule: %+v", saved.RankingRule)
 	}
 }

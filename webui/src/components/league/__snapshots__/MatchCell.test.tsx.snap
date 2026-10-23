@@ -1,0 +1,101 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MatchCell — confirmed > renders score and 確定 and matches snapshot 1`] = `
+<td
+  class="cursor-pointer p-2 text-center transition-colors hover:bg-emerald-500/10"
+>
+  <span
+    class="font-mono text-sm font-bold text-fg"
+  >
+    2
+    <span
+      class="mx-0.5 text-fg-3"
+    >
+      -
+    </span>
+    0
+  </span>
+  <div
+    class="mt-0.5 text-xs leading-tight text-emerald-400"
+  >
+    ✓ 確定
+  </div>
+</td>
+`;
+
+exports[`MatchCell — empty > renders + and matches snapshot 1`] = `
+<td
+  class="cursor-pointer p-2 text-center transition-colors hover:bg-violet-500/10"
+>
+  <span
+    class="select-none text-xl leading-none text-fg-3/60"
+  >
+    +
+  </span>
+</td>
+`;
+
+exports[`MatchCell — mismatch > renders score and 不一致 and matches snapshot 1`] = `
+<td
+  class="cursor-pointer border border-amber-500/50 bg-amber-500/5 p-2 text-center transition-colors hover:bg-amber-500/15"
+  title="相手の申告: 3 - 2"
+>
+  <span
+    class="font-mono text-sm font-bold text-fg"
+  >
+    3
+    <span
+      class="mx-0.5 text-fg-3"
+    >
+      -
+    </span>
+    1
+  </span>
+  <div
+    class="mt-0.5 text-xs leading-tight text-amber-400"
+  >
+    ⚠ 不一致
+  </div>
+</td>
+`;
+
+exports[`MatchCell — other_only > renders 要申告 and matches snapshot 1`] = `
+<td
+  class="cursor-pointer p-2 text-center transition-colors hover:bg-amber-500/10"
+  title="相手チームはすでに申告済み"
+>
+  <span
+    class="select-none text-xl leading-none text-amber-400"
+  >
+    +
+  </span>
+  <div
+    class="mt-0.5 text-xs leading-tight text-amber-400/80"
+  >
+    要申告
+  </div>
+</td>
+`;
+
+exports[`MatchCell — reported > renders score and 相手待ち and matches snapshot 1`] = `
+<td
+  class="cursor-pointer p-2 text-center transition-colors hover:bg-violet-500/10"
+>
+  <span
+    class="font-mono text-sm font-bold text-fg"
+  >
+    3
+    <span
+      class="mx-0.5 text-fg-3"
+    >
+      -
+    </span>
+    1
+  </span>
+  <div
+    class="mt-0.5 text-xs leading-tight text-fg-3"
+  >
+    ⏳ 相手待ち
+  </div>
+</td>
+`;

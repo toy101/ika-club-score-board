@@ -177,6 +177,54 @@ func TestCreateMatch_Success(t *testing.T) {
 	}
 }
 
+func TestCreateMatch_GameWinsRequiresCompletedSeries(t *testing.T) {
+	tests := []struct {
+		name      string
+		bestOf    int
+		homeScore int
+		awayScore int
+		wantOK    bool
+	}{
+		{name: "BO3 2-1", bestOf: 3, homeScore: 2, awayScore: 1, wantOK: true},
+		{name: "unfinished", bestOf: 3, homeScore: 1, awayScore: 1, wantOK: false},
+		{name: "over limit", bestOf: 3, homeScore: 3, awayScore: 0, wantOK: false},
+		{name: "BO5 losing score", bestOf: 5, homeScore: 2, awayScore: 3, wantOK: true},
+		{name: "BO5 sweep", bestOf: 5, homeScore: 3, awayScore: 0, wantOK: true},
+		{name: "BO5 unfinished", bestOf: 5, homeScore: 2, awayScore: 1, wantOK: false},
+		{name: "BO5 draw", bestOf: 5, homeScore: 3, awayScore: 3, wantOK: false},
+		{name: "BO5 negative", bestOf: 5, homeScore: 3, awayScore: -1, wantOK: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h, db := newTestHandler(t)
+			seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+			if _, err := db.Exec(`UPDATE leagues SET scoring_mode='game_wins', best_of=? WHERE id=?`, tc.bestOf, testLeagueID); err != nil {
+				t.Fatalf("update league: %v", err)
+			}
+
+			resp, err := h.CreateMatch(context.Background(), gen.CreateMatchRequestObject{
+				LeagueId: testLeagueID,
+				Body: &gen.MatchCreateRequest{
+					HomeTeamId: testTeamID1,
+					AwayTeamId: testTeamID2,
+					HomeScore:  tc.homeScore,
+					AwayScore:  tc.awayScore,
+				},
+			})
+			if err != nil {
+				t.Fatalf("CreateMatch error: %v", err)
+			}
+			if tc.wantOK {
+				if _, ok := resp.(gen.CreateMatch201JSONResponse); !ok {
+					t.Fatalf("expected 201 response, got %T", resp)
+				}
+			} else if _, ok := resp.(gen.CreateMatch422JSONResponse); !ok {
+				t.Fatalf("expected 422 response, got %T", resp)
+			}
+		})
+	}
+}
+
 func TestCreateMatch_UniqueConstraint(t *testing.T) {
 	h, db := newTestHandler(t)
 	ctx := context.Background()
@@ -295,6 +343,45 @@ func TestUpdateMatch_AwayScoreOnly(t *testing.T) {
 	// HomeScore unchanged
 	if r.HomeScore != 3 {
 		t.Fatalf("expected HomeScore=3 unchanged, got %d", r.HomeScore)
+	}
+}
+
+func TestUpdateMatch_GameWinsValidatesMergedScore(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	if _, err := db.Exec(`UPDATE leagues SET scoring_mode='game_wins', best_of=5 WHERE id=?`, testLeagueID); err != nil {
+		t.Fatalf("update league: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO matches(id, league_id, home_team_id, away_team_id, home_score, away_score) VALUES(?,?,?,?,?,?)`,
+		"match-bo5", testLeagueID, testTeamID1, testTeamID2, 3, 1,
+	); err != nil {
+		t.Fatalf("insert match: %v", err)
+	}
+
+	resp, err := h.UpdateMatch(ctx, gen.UpdateMatchRequestObject{
+		LeagueId: testLeagueID,
+		MatchId:  "match-bo5",
+		Body:     &gen.MatchUpdateRequest{AwayScore: ptr(2)},
+	})
+	if err != nil {
+		t.Fatalf("UpdateMatch error: %v", err)
+	}
+	if _, ok := resp.(gen.UpdateMatch200JSONResponse); !ok {
+		t.Fatalf("expected 200 response, got %T", resp)
+	}
+
+	resp, err = h.UpdateMatch(ctx, gen.UpdateMatchRequestObject{
+		LeagueId: testLeagueID,
+		MatchId:  "match-bo5",
+		Body:     &gen.MatchUpdateRequest{HomeScore: ptr(2)},
+	})
+	if err != nil {
+		t.Fatalf("UpdateMatch error: %v", err)
+	}
+	if _, ok := resp.(gen.UpdateMatch422JSONResponse); !ok {
+		t.Fatalf("expected 422 response, got %T", resp)
 	}
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Team, RankingRule } from "@/types/league";
 import { createMatch, updateMatch } from "@/lib/api";
 import {
@@ -26,6 +27,7 @@ type EditingTarget = {
 };
 
 export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
+  const router = useRouter();
   const { matches, refreshing, lastUpdatedAt, refreshError, refetch } =
     useMatches(leagueId);
   const [editing, setEditing] = useState<EditingTarget | null>(null);
@@ -63,6 +65,7 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
       }
       await refetch();
       setEditing(null);
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存に失敗したよ〜");
     } finally {
@@ -211,6 +214,7 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
         <MatchInputModal
           homeTeam={editing.homeTeam}
           awayTeam={editing.awayTeam}
+          rankingRule={rankingRule}
           existingMatch={editingExisting}
           otherSideMatch={editingOtherSide}
           saving={saving}

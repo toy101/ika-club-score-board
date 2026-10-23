@@ -4,6 +4,11 @@ import { createMatch, listMatches } from "@/lib/api";
 import type { Match, RankingRule, Team } from "@/types/league";
 import MatchMatrix from "./MatchMatrix";
 
+const { refreshMock } = vi.hoisted(() => ({ refreshMock: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: refreshMock }),
+}));
+
 vi.mock("@/lib/api", () => ({
   listMatches: vi.fn(), createMatch: vi.fn(), updateMatch: vi.fn(),
 }));
@@ -97,5 +102,6 @@ describe("MatchMatrix result refresh", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("alert")).toHaveTextContent("結果を更新できませんでした");
     expect(createMatch).toHaveBeenCalledTimes(1);
+    expect(refreshMock).toHaveBeenCalledOnce();
   });
 });

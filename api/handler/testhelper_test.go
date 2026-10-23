@@ -5,16 +5,17 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	_ "modernc.org/sqlite"
 )
 
-// newTestDB opens an in-memory SQLite DB, enables foreign keys, and applies the schema.
+// newTestDB opens an isolated temporary SQLite DB, enables foreign keys, and applies the schema.
 // Go tests run with cwd = package directory, so ../db/schema.sql resolves correctly at runtime.
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "handler-test.db"))
 	if err != nil {
 		t.Fatalf("newTestDB: sql.Open: %v", err)
 	}
