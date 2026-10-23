@@ -5,6 +5,9 @@ CREATE TABLE IF NOT EXISTS leagues (
     points_win   INTEGER NOT NULL DEFAULT 3,
     points_draw  INTEGER NOT NULL DEFAULT 1,
     points_loss  INTEGER NOT NULL DEFAULT 0,
+    scoring_mode TEXT    NOT NULL DEFAULT 'match_points' CHECK(scoring_mode IN ('match_points', 'game_wins')),
+    best_of      INTEGER NOT NULL DEFAULT 3 CHECK(best_of IN (3, 5)),
+    points_per_game_win INTEGER NOT NULL DEFAULT 1 CHECK(points_per_game_win >= 1),
     tiebreakers  TEXT    NOT NULL DEFAULT 'head_to_head' -- JSON配列をTEXTで保存
 );
 

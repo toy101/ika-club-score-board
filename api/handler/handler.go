@@ -44,11 +44,55 @@ func unprocessableResp(msg string) gen.UnprocessableEntityJSONResponse {
 	return gen.UnprocessableEntityJSONResponse{Message: msg}
 }
 
+func normalizeRankingRule(rule gen.RankingRule) gen.RankingRule {
+	if rule.ScoringMode == nil {
+		mode := gen.MatchPoints
+		rule.ScoringMode = &mode
+	}
+	if rule.BestOf == nil {
+		bestOf := gen.N3
+		rule.BestOf = &bestOf
+	}
+	if rule.PointsPerGameWin == nil {
+		points := 1
+		rule.PointsPerGameWin = &points
+	}
+	return rule
+}
+
+func validateRankingRule(rule gen.RankingRule) error {
+	rule = normalizeRankingRule(rule)
+	if *rule.ScoringMode != gen.MatchPoints && *rule.ScoringMode != gen.GameWins {
+		return errors.New("scoringMode must be match_points or game_wins")
+	}
+	if *rule.BestOf != gen.N3 && *rule.BestOf != gen.N5 {
+		return errors.New("bestOf must be 3 or 5")
+	}
+	if *rule.PointsPerGameWin < 1 {
+		return errors.New("pointsPerGameWin must be at least 1")
+	}
+	return nil
+}
+
+func validateSeriesScore(rule gen.RankingRule, homeScore, awayScore int) error {
+	rule = normalizeRankingRule(rule)
+	if *rule.ScoringMode != gen.GameWins {
+		return nil
+	}
+	winsNeeded := (int(*rule.BestOf) + 1) / 2
+	if homeScore < 0 || awayScore < 0 ||
+		!((homeScore == winsNeeded && awayScore < winsNeeded) ||
+			(awayScore == winsNeeded && homeScore < winsNeeded)) {
+		return fmt.Errorf("score must be a completed BO%d series", *rule.BestOf)
+	}
+	return nil
+}
+
 // ---------- League ----------
 
 func (h *Handler) ListLeagues(ctx context.Context, _ gen.ListLeaguesRequestObject) (gen.ListLeaguesResponseObject, error) {
 	rows, err := h.db.QueryContext(ctx,
-		`SELECT id, name, points_win, points_draw, points_loss, tiebreakers FROM leagues`)
+		`SELECT id, name, points_win, points_draw, points_loss, scoring_mode, best_of, points_per_game_win, tiebreakers FROM leagues`)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +120,10 @@ func (h *Handler) CreateLeague(ctx context.Context, req gen.CreateLeagueRequestO
 	if len(body.Teams) < 2 {
 		return gen.CreateLeague422JSONResponse{unprocessableResp("teams must have at least 2 items")}, nil
 	}
+	body.RankingRule = normalizeRankingRule(body.RankingRule)
+	if err := validateRankingRule(body.RankingRule); err != nil {
+		return gen.CreateLeague422JSONResponse{unprocessableResp(err.Error())}, nil
+	}
 
 	leagueID := uuid.NewString()
 	tiebreakerJSON, err := json.Marshal(body.RankingRule.Tiebreakers)
@@ -90,10 +138,11 @@ func (h *Handler) CreateLeague(ctx context.Context, req gen.CreateLeagueRequestO
 	defer tx.Rollback() //nolint:errcheck
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO leagues(id, name, points_win, points_draw, points_loss, tiebreakers)
-		 VALUES(?,?,?,?,?,?)`,
+		`INSERT INTO leagues(id, name, points_win, points_draw, points_loss, scoring_mode, best_of, points_per_game_win, tiebreakers)
+		 VALUES(?,?,?,?,?,?,?,?,?)`,
 		leagueID, body.Name,
 		body.RankingRule.PointsWin, body.RankingRule.PointsDraw, body.RankingRule.PointsLoss,
+		*body.RankingRule.ScoringMode, *body.RankingRule.BestOf, *body.RankingRule.PointsPerGameWin,
 		string(tiebreakerJSON),
 	)
 	if err != nil {
@@ -131,7 +180,7 @@ func (h *Handler) CreateLeague(ctx context.Context, req gen.CreateLeagueRequestO
 
 func (h *Handler) GetLeague(ctx context.Context, req gen.GetLeagueRequestObject) (gen.GetLeagueResponseObject, error) {
 	row := h.db.QueryRowContext(ctx,
-		`SELECT id, name, points_win, points_draw, points_loss, tiebreakers FROM leagues WHERE id=?`,
+		`SELECT id, name, points_win, points_draw, points_loss, scoring_mode, best_of, points_per_game_win, tiebreakers FROM leagues WHERE id=?`,
 		req.LeagueId,
 	)
 	l, err := scanLeagueRow(row)
@@ -156,8 +205,14 @@ func (h *Handler) GetLeague(ctx context.Context, req gen.GetLeagueRequestObject)
 }
 
 func (h *Handler) UpdateLeague(ctx context.Context, req gen.UpdateLeagueRequestObject) (gen.UpdateLeagueResponseObject, error) {
-	row := h.db.QueryRowContext(ctx,
-		`SELECT id, name, points_win, points_draw, points_loss, tiebreakers FROM leagues WHERE id=?`,
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	row := tx.QueryRowContext(ctx,
+		`SELECT id, name, points_win, points_draw, points_loss, scoring_mode, best_of, points_per_game_win, tiebreakers FROM leagues WHERE id=?`,
 		req.LeagueId,
 	)
 	current, err := scanLeagueRow(row)
@@ -173,21 +228,40 @@ func (h *Handler) UpdateLeague(ctx context.Context, req gen.UpdateLeagueRequestO
 		current.Name = *body.Name
 	}
 	if body.RankingRule != nil {
-		current.RankingRule = *body.RankingRule
+		nextRule := normalizeRankingRule(*body.RankingRule)
+		if err := validateRankingRule(nextRule); err != nil {
+			return gen.UpdateLeague422JSONResponse{unprocessableResp(err.Error())}, nil
+		}
+		current.RankingRule = normalizeRankingRule(current.RankingRule)
+		if *current.RankingRule.ScoringMode != *nextRule.ScoringMode || *current.RankingRule.BestOf != *nextRule.BestOf {
+			var matchCount int
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(1) FROM matches WHERE league_id=?`, req.LeagueId).Scan(&matchCount); err != nil {
+				return nil, err
+			}
+			if matchCount > 0 {
+				return gen.UpdateLeague422JSONResponse{unprocessableResp("scoringMode and bestOf cannot change after match reports exist")}, nil
+			}
+		}
+		current.RankingRule = nextRule
 	}
+	current.RankingRule = normalizeRankingRule(current.RankingRule)
 
 	tiebreakerJSON, err := json.Marshal(current.RankingRule.Tiebreakers)
 	if err != nil {
 		return nil, err
 	}
-	_, err = h.db.ExecContext(ctx,
-		`UPDATE leagues SET name=?, points_win=?, points_draw=?, points_loss=?, tiebreakers=? WHERE id=?`,
+	_, err = tx.ExecContext(ctx,
+		`UPDATE leagues SET name=?, points_win=?, points_draw=?, points_loss=?, scoring_mode=?, best_of=?, points_per_game_win=?, tiebreakers=? WHERE id=?`,
 		current.Name,
 		current.RankingRule.PointsWin, current.RankingRule.PointsDraw, current.RankingRule.PointsLoss,
+		*current.RankingRule.ScoringMode, *current.RankingRule.BestOf, *current.RankingRule.PointsPerGameWin,
 		string(tiebreakerJSON),
 		req.LeagueId,
 	)
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return gen.UpdateLeague200JSONResponse(current), nil
@@ -369,11 +443,20 @@ func (h *Handler) ListMatches(ctx context.Context, req gen.ListMatchesRequestObj
 }
 
 func (h *Handler) CreateMatch(ctx context.Context, req gen.CreateMatchRequestObject) (gen.CreateMatchResponseObject, error) {
-	exists, err := h.leagueExists(ctx, req.LeagueId)
+	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
+	defer tx.Rollback() //nolint:errcheck
+
+	league, err := scanLeagueRow(tx.QueryRowContext(ctx,
+		`SELECT id, name, points_win, points_draw, points_loss, scoring_mode, best_of, points_per_game_win, tiebreakers FROM leagues WHERE id=?`,
+		req.LeagueId,
+	))
+	if err != nil {
+		if !isNotFound(err) {
+			return nil, err
+		}
 		return gen.CreateMatch404JSONResponse{notFoundResp("league not found")}, nil
 	}
 
@@ -381,9 +464,12 @@ func (h *Handler) CreateMatch(ctx context.Context, req gen.CreateMatchRequestObj
 	if body.HomeTeamId == body.AwayTeamId {
 		return gen.CreateMatch422JSONResponse{unprocessableResp("homeTeamId and awayTeamId must differ")}, nil
 	}
+	if err := validateSeriesScore(league.RankingRule, body.HomeScore, body.AwayScore); err != nil {
+		return gen.CreateMatch422JSONResponse{unprocessableResp(err.Error())}, nil
+	}
 
 	matchID := uuid.NewString()
-	_, err = h.db.ExecContext(ctx,
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO matches(id, league_id, home_team_id, away_team_id, home_score, away_score) VALUES(?,?,?,?,?,?)`,
 		matchID, req.LeagueId, body.HomeTeamId, body.AwayTeamId, body.HomeScore, body.AwayScore,
 	)
@@ -392,10 +478,13 @@ func (h *Handler) CreateMatch(ctx context.Context, req gen.CreateMatchRequestObj
 	}
 
 	var m gen.Match
-	err = h.db.QueryRowContext(ctx,
+	err = tx.QueryRowContext(ctx,
 		`SELECT id, home_team_id, away_team_id, home_score, away_score FROM matches WHERE id=?`, matchID,
 	).Scan(&m.Id, &m.HomeTeamId, &m.AwayTeamId, &m.HomeScore, &m.AwayScore)
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return gen.CreateMatch201JSONResponse(m), nil
@@ -420,6 +509,13 @@ func (h *Handler) UpdateMatch(ctx context.Context, req gen.UpdateMatchRequestObj
 	}
 	if body.AwayScore != nil {
 		m.AwayScore = *body.AwayScore
+	}
+	league, err := h.fetchLeague(ctx, req.LeagueId)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateSeriesScore(league.RankingRule, m.HomeScore, m.AwayScore); err != nil {
+		return gen.UpdateMatch422JSONResponse{unprocessableResp(err.Error())}, nil
 	}
 
 	_, err = h.db.ExecContext(ctx,
@@ -454,7 +550,7 @@ func (h *Handler) leagueExists(ctx context.Context, id string) (bool, error) {
 
 func (h *Handler) fetchLeague(ctx context.Context, id string) (gen.League, error) {
 	row := h.db.QueryRowContext(ctx,
-		`SELECT id, name, points_win, points_draw, points_loss, tiebreakers FROM leagues WHERE id=?`, id)
+		`SELECT id, name, points_win, points_draw, points_loss, scoring_mode, best_of, points_per_game_win, tiebreakers FROM leagues WHERE id=?`, id)
 	return scanLeagueRow(row)
 }
 
@@ -536,8 +632,12 @@ func scanLeague(rows *sql.Rows) (gen.League, error) {
 func scanLeagueRow(s leagueScanner) (gen.League, error) {
 	var l gen.League
 	var tiebreakerJSON string
+	var scoringMode gen.RankingRuleScoringMode
+	var bestOf gen.RankingRuleBestOf
+	var pointsPerGameWin int
 	if err := s.Scan(&l.Id, &l.Name,
 		&l.RankingRule.PointsWin, &l.RankingRule.PointsDraw, &l.RankingRule.PointsLoss,
+		&scoringMode, &bestOf, &pointsPerGameWin,
 		&tiebreakerJSON,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -548,5 +648,8 @@ func scanLeagueRow(s leagueScanner) (gen.League, error) {
 	if err := json.Unmarshal([]byte(tiebreakerJSON), &l.RankingRule.Tiebreakers); err != nil {
 		return l, fmt.Errorf("scanLeagueRow tiebreakers: %w", err)
 	}
+	l.RankingRule.ScoringMode = &scoringMode
+	l.RankingRule.BestOf = &bestOf
+	l.RankingRule.PointsPerGameWin = &pointsPerGameWin
 	return l, nil
 }

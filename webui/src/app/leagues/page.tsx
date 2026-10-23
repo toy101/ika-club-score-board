@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { listLeagues } from "@/lib/api";
 import type { League } from "@/types/league";
+import {
+  getBestOf,
+  getPointsPerGameWin,
+  getScoringMode,
+} from "@/lib/ranking-rule";
 
 function LeagueCard({ league }: { league: League }) {
   const { rankingRule } = league;
@@ -15,8 +20,9 @@ function LeagueCard({ league }: { league: League }) {
           {league.name}
         </p>
         <p className="mt-0.5 font-mono text-[11px] text-fg-3">
-          勝 {rankingRule.pointsWin} / 分 {rankingRule.pointsDraw} / 負{" "}
-          {rankingRule.pointsLoss}
+          {getScoringMode(rankingRule) === "game_wins"
+            ? `BO${getBestOf(rankingRule)} / 1本 ${getPointsPerGameWin(rankingRule)}pt`
+            : `勝 ${rankingRule.pointsWin} / 分 ${rankingRule.pointsDraw} / 負 ${rankingRule.pointsLoss}`}
         </p>
       </div>
       <span className="font-mono text-lg text-fg-3 transition-transform group-hover:translate-x-0.5 group-hover:text-fg">

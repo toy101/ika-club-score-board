@@ -14,6 +14,18 @@ import (
 	strictecho "github.com/oapi-codegen/runtime/strictmiddleware/echo"
 )
 
+// Defines values for RankingRuleBestOf.
+const (
+	N3 RankingRuleBestOf = 3
+	N5 RankingRuleBestOf = 5
+)
+
+// Defines values for RankingRuleScoringMode.
+const (
+	GameWins    RankingRuleScoringMode = "game_wins"
+	MatchPoints RankingRuleScoringMode = "match_points"
+)
+
 // Defines values for RankingRuleTiebreakers.
 const (
 	GoalDifference RankingRuleTiebreakers = "goal_difference"
@@ -121,18 +133,33 @@ type Member struct {
 
 // RankingRule defines model for RankingRule.
 type RankingRule struct {
+	// BestOf game_wins 方式で使用するシリーズ形式
+	BestOf *RankingRuleBestOf `json:"bestOf,omitempty"`
+
 	// PointsDraw 引分時の勝ち点
 	PointsDraw int `json:"pointsDraw"`
 
 	// PointsLoss 敗北時の勝ち点
 	PointsLoss int `json:"pointsLoss"`
 
+	// PointsPerGameWin game_wins 方式で獲得した1本あたりの順位点
+	PointsPerGameWin *int `json:"pointsPerGameWin,omitempty"`
+
 	// PointsWin 勝利時の勝ち点
 	PointsWin int `json:"pointsWin"`
+
+	// ScoringMode 順位点の計算方式。match_points は対戦結果、game_wins は獲得本数で計算する
+	ScoringMode *RankingRuleScoringMode `json:"scoringMode,omitempty"`
 
 	// Tiebreakers タイブレーク判定の優先順位（先頭が最優先）
 	Tiebreakers []RankingRuleTiebreakers `json:"tiebreakers"`
 }
+
+// RankingRuleBestOf game_wins 方式で使用するシリーズ形式
+type RankingRuleBestOf int
+
+// RankingRuleScoringMode 順位点の計算方式。match_points は対戦結果、game_wins は獲得本数で計算する
+type RankingRuleScoringMode string
 
 // RankingRuleTiebreakers defines model for RankingRule.Tiebreakers.
 type RankingRuleTiebreakers string

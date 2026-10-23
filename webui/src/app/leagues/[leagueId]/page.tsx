@@ -1,18 +1,13 @@
 import { notFound } from "next/navigation";
-import { getLeague } from "@/lib/api";
+import { getLeague, listMatches } from "@/lib/api";
 import type { Team } from "@/types/league";
 import MatchMatrix from "@/components/league/MatchMatrix";
 import ModeRoulette from "@/components/league/ModeRoulette";
 import { TeamColorDot } from "@/components/league/TeamColorDot";
+import { LeagueSettingsEditor } from "@/components/league/LeagueSettingsEditor";
 
 type Props = {
   params: Promise<{ leagueId: string }>;
-};
-
-const TIEBREAKER_LABELS: Record<string, string> = {
-  head_to_head: "直接対決",
-  goal_difference: "得失点差",
-  goals_scored: "総得点",
 };
 
 function TeamCard({ team }: { team: Team }) {
@@ -39,7 +34,10 @@ function TeamCard({ team }: { team: Team }) {
 
 export default async function LeagueDetailPage({ params }: Props) {
   const { leagueId } = await params;
-  const league = await getLeague(leagueId).catch(() => notFound());
+  const [league, matches] = await Promise.all([
+    getLeague(leagueId),
+    listMatches(leagueId),
+  ]).catch(() => notFound());
 
   const { rankingRule } = league;
 
@@ -68,51 +66,11 @@ export default async function LeagueDetailPage({ params }: Props) {
             <p className="text-xl font-bold text-fg lg:text-2xl">{league.name}</p>
           </section>
 
-          {/* ランキングルール */}
-          <section className="space-y-4 rounded-2xl border border-line bg-ink-2 p-5">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
-              <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
-              ランキングルール
-            </h2>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-              <div className="grid grid-cols-3 gap-3">
-                {(
-                  [
-                    { label: "勝利", value: rankingRule.pointsWin, accent: "from-violet-500/25 to-fuchsia-500/15" },
-                    { label: "引分", value: rankingRule.pointsDraw, accent: "from-cyan-500/25 to-violet-500/15" },
-                    { label: "敗北", value: rankingRule.pointsLoss, accent: "from-rose-500/15 to-fuchsia-500/10" },
-                  ] as const
-                ).map(({ label, value, accent }) => (
-                  <div
-                    key={label}
-                    className={`relative overflow-hidden rounded-xl border border-line bg-gradient-to-br ${accent} py-3 text-center`}
-                  >
-                    <p className="mb-1 text-xs text-fg-2">{label}</p>
-                    <p className="font-mono text-2xl font-bold text-fg">{value}</p>
-                    <p className="text-[10px] text-fg-3">pt</p>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
-                  tiebreaker.priority
-                </p>
-                <ol className="space-y-1.5">
-                  {rankingRule.tiebreakers.map((tb, i) => (
-                    <li
-                      key={tb}
-                      className="flex items-center gap-2 rounded-lg border border-line/60 bg-ink-1 px-3 py-2 text-sm text-fg-2"
-                    >
-                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-violet-400/40 bg-violet-500/20 font-mono text-xs font-bold text-violet-200">
-                        {i + 1}
-                      </span>
-                      {TIEBREAKER_LABELS[tb] ?? tb}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-          </section>
+          <LeagueSettingsEditor
+            leagueId={leagueId}
+            initialRankingRule={rankingRule}
+            hasMatches={matches.length > 0}
+          />
         </div>
 
         {/* 中段: ランキング & 対戦結果マトリクス (横全幅) */}

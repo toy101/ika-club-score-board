@@ -103,8 +103,8 @@ describe("MatchCell — reported", () => {
         </tbody>
       </table>,
     );
-    expect(screen.getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByRole("cell")).toHaveTextContent("3-1");
+    expect(screen.getByText("⏳ 相手待ち")).toBeInTheDocument();
     expect(container.querySelector("td")).toMatchSnapshot();
   });
 
@@ -120,7 +120,7 @@ describe("MatchCell — reported", () => {
         </tbody>
       </table>,
     );
-    await userEvent.click(screen.getByText("3"));
+    await userEvent.click(screen.getByRole("cell"));
     expect(onClick).toHaveBeenCalledOnce();
   });
 });
@@ -137,8 +137,8 @@ describe("MatchCell — confirmed", () => {
         </tbody>
       </table>,
     );
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByRole("cell")).toHaveTextContent("2-0");
+    expect(screen.getByText("✓ 確定")).toBeInTheDocument();
     expect(container.querySelector("td")).toMatchSnapshot();
   });
 
@@ -154,7 +154,7 @@ describe("MatchCell — confirmed", () => {
         </tbody>
       </table>,
     );
-    await userEvent.click(screen.getByText("2"));
+    await userEvent.click(screen.getByRole("cell"));
     expect(onClick).toHaveBeenCalledOnce();
   });
 });

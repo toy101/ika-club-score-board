@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Match, Team } from "@/types/league";
+import type { Match, RankingRule, Team } from "@/types/league";
 import { TeamColorDot } from "@/components/league/TeamColorDot";
+import {
+  getBestOf,
+  getScoringMode,
+  isCompletedSeriesScore,
+} from "@/lib/ranking-rule";
 
 type Props = {
   homeTeam: Team;
   awayTeam: Team;
+  rankingRule: RankingRule;
   existingMatch?: Match;
   otherSideMatch?: Match;
   saving: boolean;
@@ -18,6 +24,7 @@ type Props = {
 export default function MatchInputModal({
   homeTeam,
   awayTeam,
+  rankingRule,
   existingMatch,
   otherSideMatch,
   saving,
@@ -50,6 +57,16 @@ export default function MatchInputModal({
     e.preventDefault();
     if (selfScore < 0 || opponentScore < 0) {
       setLocalError("0以上の整数を入力してね〜");
+      return;
+    }
+    if (
+      getScoringMode(rankingRule) === "game_wins" &&
+      !isCompletedSeriesScore(selfScore, opponentScore, getBestOf(rankingRule))
+    ) {
+      const bestOf = getBestOf(rankingRule);
+      setLocalError(
+        `BO${bestOf}は、どちらかが${Math.ceil(bestOf / 2)}本を先取したスコアを入力してね〜`,
+      );
       return;
     }
     setLocalError(null);
@@ -108,12 +125,19 @@ export default function MatchInputModal({
 
         <div className="space-y-1.5">
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-fg-3">
-            score
+            {getScoringMode(rankingRule) === "game_wins"
+              ? `BO${getBestOf(rankingRule)} / game wins`
+              : "score"}
           </p>
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
             <ScoreStepper
               label={`${homeTeam.name}のスコア`}
               value={selfScore}
+              max={
+                getScoringMode(rankingRule) === "game_wins"
+                  ? Math.ceil(getBestOf(rankingRule) / 2)
+                  : undefined
+              }
               onChange={(v) => {
                 setSelfScore(v);
                 if (localError) setLocalError(null);
@@ -123,6 +147,11 @@ export default function MatchInputModal({
             <ScoreStepper
               label={`${awayTeam.name}のスコア`}
               value={opponentScore}
+              max={
+                getScoringMode(rankingRule) === "game_wins"
+                  ? Math.ceil(getBestOf(rankingRule) / 2)
+                  : undefined
+              }
               onChange={(v) => {
                 setOpponentScore(v);
                 if (localError) setLocalError(null);
@@ -183,10 +212,12 @@ export default function MatchInputModal({
 function ScoreStepper({
   label,
   value,
+  max,
   onChange,
 }: {
   label: string;
   value: number;
+  max?: number;
   onChange: (value: number) => void;
 }) {
   const stepBtn =
@@ -206,17 +237,20 @@ function ScoreStepper({
         type="number"
         inputMode="numeric"
         min="0"
+        max={max}
         value={value}
         onChange={(e) => {
           const next = parseInt(e.target.value, 10);
-          onChange(Number.isNaN(next) || next < 0 ? 0 : next);
+          const normalized = Number.isNaN(next) || next < 0 ? 0 : next;
+          onChange(max === undefined ? normalized : Math.min(max, normalized));
         }}
         aria-label={label}
         className="w-full min-w-0 rounded-lg border border-line-2 bg-ink-1 px-1 py-2.5 text-center font-mono text-2xl font-bold text-fg outline-none transition-colors focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/60 focus:shadow-[0_0_22px_rgba(34,211,238,0.55),0_0_8px_rgba(34,211,238,0.4)]"
       />
       <button
         type="button"
-        onClick={() => onChange(value + 1)}
+        onClick={() => onChange(max === undefined ? value + 1 : Math.min(max, value + 1))}
+        disabled={max !== undefined && value >= max}
         aria-label={`${label}を1増やす`}
         className={stepBtn}
       >

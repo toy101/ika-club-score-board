@@ -17,6 +17,9 @@ const DEFAULT_RANKING_RULE: RankingRule = {
   pointsDraw: 1,
   pointsLoss: 0,
   tiebreakers: ["head_to_head"],
+  scoringMode: "match_points",
+  bestOf: 3,
+  pointsPerGameWin: 1,
 };
 
 type FormErrors = {
@@ -119,12 +122,20 @@ export default function LeagueCreatePage() {
       valid = false;
     }
 
-    const pointFields = ["pointsWin", "pointsDraw", "pointsLoss"] as const;
-    for (const field of pointFields) {
-      if (!Number.isInteger(rankingRule[field]) || rankingRule[field] < 0) {
-        newErrors.rankingRule[field] = "0以上の整数を入力してください";
-        valid = false;
+    if ((rankingRule.scoringMode ?? "match_points") === "match_points") {
+      const pointFields = ["pointsWin", "pointsDraw", "pointsLoss"] as const;
+      for (const field of pointFields) {
+        if (!Number.isInteger(rankingRule[field]) || rankingRule[field] < 0) {
+          newErrors.rankingRule[field] = "0以上の整数を入力してください";
+          valid = false;
+        }
       }
+    } else if (
+      !Number.isInteger(rankingRule.pointsPerGameWin) ||
+      (rankingRule.pointsPerGameWin ?? 0) < 1
+    ) {
+      newErrors.rankingRule.pointsPerGameWin = "1以上の整数を入力してください";
+      valid = false;
     }
 
     setErrors(newErrors);

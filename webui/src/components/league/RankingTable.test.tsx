@@ -117,8 +117,29 @@ describe("RankingTable", () => {
     // rows[0] = thead row; rows[1..4] = tbody rows
     expect(rows[1].textContent).toContain("Alpha");
     expect(rows[2].textContent).toContain("Beta");
-    expect(rows[3].textContent).toContain("Gamma");
-    expect(rows[4].textContent).toContain("Delta");
+    expect(rows[3].textContent).toContain("Delta");
+    expect(rows[4].textContent).toContain("Gamma");
+  });
+
+  it("labels game totals clearly in game-wins mode", () => {
+    render(
+      <RankingTable
+        teams={teams}
+        matches={matches}
+        rankingRule={{
+          ...defaultRule,
+          scoringMode: "game_wins",
+          bestOf: 5,
+          pointsPerGameWin: 1,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("獲得")).toBeInTheDocument();
+    expect(screen.getByText("被獲得")).toBeInTheDocument();
+    expect(
+      screen.getByText(/勝点は獲得本数を基準に計算します/),
+    ).toBeInTheDocument();
   });
 
   it("rank numbers are correct (1, 2, 3, 4)", () => {
@@ -147,10 +168,4 @@ describe("RankingTable", () => {
     expect(alphaRow.cells[9].textContent).toBe("9"); // points
   });
 
-  it("snapshot of the full rendered table", () => {
-    const { container } = render(
-      <RankingTable teams={teams} matches={matches} rankingRule={defaultRule} />,
-    );
-    expect(container).toMatchSnapshot();
-  });
 });

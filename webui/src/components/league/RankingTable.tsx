@@ -3,6 +3,7 @@
 import type { Team, Match, RankingRule } from "@/types/league";
 import { rankTeams } from "@/lib/ranking";
 import { TeamColorDot } from "@/components/league/TeamColorDot";
+import { getScoringMode } from "@/lib/ranking-rule";
 
 type Props = {
   teams: Team[];
@@ -13,6 +14,7 @@ type Props = {
 export default function RankingTable({ teams, matches, rankingRule }: Props) {
   if (teams.length < 2) return null;
   const ranked = rankTeams(teams, matches, rankingRule);
+  const usesGameWins = getScoringMode(rankingRule) === "game_wins";
 
   return (
     <section className="space-y-3">
@@ -28,11 +30,11 @@ export default function RankingTable({ teams, matches, rankingRule }: Props) {
               <Th align="center">#</Th>
               <Th align="left">team</Th>
               <Th align="center">試</Th>
-              <Th align="center">勝</Th>
-              <Th align="center">分</Th>
-              <Th align="center">敗</Th>
-              <Th align="center">得</Th>
-              <Th align="center">失</Th>
+              <Th align="center" title="シリーズ勝利">勝</Th>
+              <Th align="center" title="シリーズ引き分け">分</Th>
+              <Th align="center" title="シリーズ敗北">敗</Th>
+              <Th align="center">{usesGameWins ? "獲得" : "得"}</Th>
+              <Th align="center">{usesGameWins ? "被獲得" : "失"}</Th>
               <Th align="center">差</Th>
               <Th align="center">勝点</Th>
             </tr>
@@ -75,7 +77,8 @@ export default function RankingTable({ teams, matches, rankingRule }: Props) {
       </div>
 
       <p className="px-1 text-xs text-fg-3">
-        確定済み（両チームの申告一致）の試合のみで集計してるよ〜
+        確定済み（両チームの申告一致）の試合のみで集計。
+        {usesGameWins && " 勝点は獲得本数を基準に計算します。"}
       </p>
     </section>
   );
@@ -84,13 +87,16 @@ export default function RankingTable({ teams, matches, rankingRule }: Props) {
 function Th({
   children,
   align,
+  title,
 }: {
   children: React.ReactNode;
   align: "left" | "center";
+  title?: string;
 }) {
   const alignClass = align === "center" ? "text-center" : "text-left";
   return (
     <th
+      title={title}
       className={`border-b border-line bg-ink-3 p-2 ${alignClass} font-mono text-[10px] uppercase tracking-wider font-normal text-fg-3`}
     >
       {children}

@@ -1,10 +1,15 @@
 export type Tiebreaker = "head_to_head" | "goal_difference" | "goals_scored";
+export type ScoringMode = "match_points" | "game_wins";
+export type BestOf = 3 | 5;
 
 export type RankingRule = {
   pointsWin: number;
   pointsDraw: number;
   pointsLoss: number;
   tiebreakers: Tiebreaker[];
+  scoringMode?: ScoringMode;
+  bestOf?: BestOf;
+  pointsPerGameWin?: number;
 };
 
 export type Member = {

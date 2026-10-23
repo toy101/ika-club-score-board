@@ -1,5 +1,6 @@
 import type { Team, Match, RankingRule, Tiebreaker } from "@/types/league";
 import { getConfirmedPairs, type ConfirmedPair } from "@/lib/matches";
+import { getPointsPerGameWin } from "@/lib/ranking-rule";
 
 export type TeamStats = {
   played: number;
@@ -31,6 +32,19 @@ function emptyStats(): TeamStats {
   };
 }
 
+function matchPoints(
+  scoredFor: number,
+  scoredAgainst: number,
+  rule: RankingRule,
+): number {
+  if (rule.scoringMode === "game_wins") {
+    return scoredFor * getPointsPerGameWin(rule);
+  }
+  if (scoredFor > scoredAgainst) return rule.pointsWin;
+  if (scoredFor < scoredAgainst) return rule.pointsLoss;
+  return rule.pointsDraw;
+}
+
 function applyMatch(
   stats: TeamStats,
   scoredFor: number,
@@ -41,15 +55,13 @@ function applyMatch(
   stats.goalsFor += scoredFor;
   stats.goalsAgainst += scoredAgainst;
   stats.goalDiff = stats.goalsFor - stats.goalsAgainst;
+  stats.points += matchPoints(scoredFor, scoredAgainst, rule);
   if (scoredFor > scoredAgainst) {
     stats.wins += 1;
-    stats.points += rule.pointsWin;
   } else if (scoredFor < scoredAgainst) {
     stats.losses += 1;
-    stats.points += rule.pointsLoss;
   } else {
     stats.draws += 1;
-    stats.points += rule.pointsDraw;
   }
 }
 
@@ -91,13 +103,9 @@ function tiebreakerKey(
       for (const p of pairs) {
         if (!groupIds.has(p.teamA) || !groupIds.has(p.teamB)) continue;
         if (p.teamA === teamId) {
-          if (p.scoreA > p.scoreB) points += rule.pointsWin;
-          else if (p.scoreA < p.scoreB) points += rule.pointsLoss;
-          else points += rule.pointsDraw;
+          points += matchPoints(p.scoreA, p.scoreB, rule);
         } else if (p.teamB === teamId) {
-          if (p.scoreB > p.scoreA) points += rule.pointsWin;
-          else if (p.scoreB < p.scoreA) points += rule.pointsLoss;
-          else points += rule.pointsDraw;
+          points += matchPoints(p.scoreB, p.scoreA, rule);
         }
       }
       return points;
