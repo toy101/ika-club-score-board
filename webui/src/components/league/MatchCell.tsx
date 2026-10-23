@@ -30,7 +30,7 @@ export default function MatchCell({ status, onClick }: Props) {
             +
           </span>
           <div className="mt-0.5 text-xs leading-tight text-amber-400/80">
-            要申告
+            入力してね〜
           </div>
         </td>
       );

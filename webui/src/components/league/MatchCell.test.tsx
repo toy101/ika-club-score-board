@@ -53,7 +53,7 @@ describe("MatchCell — empty", () => {
 });
 
 describe("MatchCell — other_only", () => {
-  it("renders 要申告 and matches snapshot", () => {
+  it("renders 入力してね〜 and matches snapshot", () => {
     const status: CellStatus = {
       kind: "other_only",
       otherMatch: makeMatch(1, 2),
@@ -67,7 +67,7 @@ describe("MatchCell — other_only", () => {
         </tbody>
       </table>,
     );
-    expect(screen.getByText("要申告")).toBeInTheDocument();
+    expect(screen.getByText("入力してね〜")).toBeInTheDocument();
     expect(container.querySelector("td")).toMatchSnapshot();
   });
 
@@ -86,7 +86,7 @@ describe("MatchCell — other_only", () => {
         </tbody>
       </table>,
     );
-    await userEvent.click(screen.getByText("要申告"));
+    await userEvent.click(screen.getByText("入力してね〜"));
     expect(onClick).toHaveBeenCalledOnce();
   });
 });

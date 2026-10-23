@@ -59,7 +59,7 @@ exports[`MatchCell — mismatch > renders score and 不一致 and matches snapsh
 </td>
 `;
 
-exports[`MatchCell — other_only > renders 要申告 and matches snapshot 1`] = `
+exports[`MatchCell — other_only > renders 入力してね〜 and matches snapshot 1`] = `
 <td
   class="cursor-pointer p-2 text-center transition-colors hover:bg-amber-500/10"
   title="相手チームはすでに申告済み"
@@ -72,7 +72,7 @@ exports[`MatchCell — other_only > renders 要申告 and matches snapshot 1`] =
   <div
     class="mt-0.5 text-xs leading-tight text-amber-400/80"
   >
-    要申告
+    入力してね〜
   </div>
 </td>
 `;
