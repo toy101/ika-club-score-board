@@ -23,7 +23,7 @@
 ルートにワークスペース設定や共通パッケージはなく、API と WebUI は独立している。
 
 - `api/`: Go 1.25、Echo v4、Turso/libSQL。依存は `go.mod` / `go.sum` で管理する。
-- `webui/`: Next.js 16.2.4（App Router）、React 19.2.4、TypeScript strict、Tailwind CSS v4、ESLint 9。
+- `webui/`: Next.js 16.4.2（App Router）、React 19.2.9、TypeScript strict、Tailwind CSS v4、ESLint 9。
 - WebUI は `packageManager: pnpm@10.21.0` と `pnpm-lock.yaml` を使用する。`.npmrc` の `shamefully-hoist=true` を維持し、別のパッケージマネージャやロックファイルを持ち込まない。
 
 | ファイル・ディレクトリ | 役割 |

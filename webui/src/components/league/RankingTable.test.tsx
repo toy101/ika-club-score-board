@@ -125,7 +125,7 @@ describe("RankingTable", () => {
     render(
       <RankingTable teams={teams} matches={matches} rankingRule={defaultRule} />,
     );
-    const rows = screen.getAllByRole("row");
+    const rows = screen.getAllByRole<HTMLTableRowElement>("row");
     // First cell in each tbody row is the rank
     expect(rows[1].cells[0].textContent).toBe("1");
     expect(rows[2].cells[0].textContent).toBe("2");
@@ -137,7 +137,7 @@ describe("RankingTable", () => {
     render(
       <RankingTable teams={teams} matches={matches} rankingRule={defaultRule} />,
     );
-    const rows = screen.getAllByRole("row");
+    const rows = screen.getAllByRole<HTMLTableRowElement>("row");
     const alphaRow = rows[1];
     // columns: #, team, 試(played), 勝(wins), 分(draws), 敗(losses), 得(gf), 失(ga), 差(gd), 勝点(pts)
     expect(alphaRow.cells[2].textContent).toBe("3"); // played

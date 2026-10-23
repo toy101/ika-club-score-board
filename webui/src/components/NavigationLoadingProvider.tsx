@@ -45,9 +45,16 @@ export default function NavigationLoadingProvider({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [previousPathname, setPreviousPathname] = useState(pathname);
   const [visible, setVisible] = useState(false);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset before committing the destination route so its overlay never flashes.
+  if (previousPathname !== pathname) {
+    setPreviousPathname(pathname);
+    setVisible(false);
+  }
 
   const clearTimers = useCallback(() => {
     if (showTimerRef.current) {
@@ -71,10 +78,11 @@ export default function NavigationLoadingProvider({
     maxTimerRef.current = setTimeout(stopNavigating, MAX_VISIBLE_MS);
   }, [clearTimers, stopNavigating]);
 
-  // The route segment is committed once `pathname` changes: navigation is done.
+  // Cancel pending timers when navigation completes or the provider unmounts.
   useEffect(() => {
-    stopNavigating();
-  }, [pathname, stopNavigating]);
+    clearTimers();
+    return clearTimers;
+  }, [pathname, clearTimers]);
 
   // Detect `<Link>` (and plain anchor) navigations without touching each link.
   useEffect(() => {
