@@ -262,6 +262,46 @@ describe("api.ts — endpoint functions", () => {
     expect(JSON.parse(init.body as string)).toEqual(payload);
   });
 
+  it("getTeam — GET /leagues/:leagueId/teams/:teamId with abort signal", async () => {
+    const mockFetch = makeMockFetch(
+      makeFetchResponse(200, { id: "team-1", name: "Alpha" }),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    const controller = new AbortController();
+
+    const { getTeam } = await import("@/lib/api");
+    await getTeam("league-1", "team-1", controller.signal);
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/leagues/league-1/teams/team-1");
+    expect(init.signal).toBe(controller.signal);
+  });
+
+  it("updateTeamRoomUrl — PATCH /leagues/:leagueId/teams/:teamId with roomUrl", async () => {
+    const mockFetch = makeMockFetch(
+      makeFetchResponse(200, {
+        id: "team-1",
+        name: "Alpha",
+        roomUrl: "https://s.nintendo.com/abc",
+      }),
+    );
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { updateTeamRoomUrl } = await import("@/lib/api");
+    await updateTeamRoomUrl(
+      "league-1",
+      "team-1",
+      "https://s.nintendo.com/abc",
+    );
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/leagues/league-1/teams/team-1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({
+      roomUrl: "https://s.nintendo.com/abc",
+    });
+  });
+
   it("listMatches — GET /leagues/:id/matches", async () => {
     const mockFetch = makeMockFetch(makeFetchResponse(200, []));
     vi.stubGlobal("fetch", mockFetch);

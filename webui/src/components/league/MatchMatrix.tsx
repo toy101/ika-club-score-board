@@ -13,6 +13,7 @@ import { useMatches } from "./useMatches";
 import MatchCell from "./MatchCell";
 import { TeamColorDot } from "./TeamColorDot";
 import MatchInputModal from "./MatchInputModal";
+import HeyatateModal from "./HeyatateModal";
 import RankingTable from "./RankingTable";
 
 const MemoizedRankingTable = memo(RankingTable);
@@ -33,6 +34,7 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
   const { matches, refreshing, lastUpdatedAt, refreshError, refetch, applySavedMatch } =
     useMatches(leagueId);
   const [editing, setEditing] = useState<EditingTarget | null>(null);
+  const [heyatateTeam, setHeyatateTeam] = useState<Team | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +44,14 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
   const startEdit = useCallback((homeTeam: Team, awayTeam: Team) => {
     setError(null);
     setEditing({ homeTeam, awayTeam });
+  }, []);
+
+  const openHeyatate = useCallback((team: Team) => {
+    setHeyatateTeam(team);
+  }, []);
+
+  const closeHeyatate = useCallback(() => {
+    setHeyatateTeam(null);
   }, []);
 
   async function handleSave(homeScore: number, awayScore: number) {
@@ -124,7 +134,12 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
       </div>
       <MemoizedRankingTable teams={teams} matches={matches} rankingRule={rankingRule} />
 
-      <MatchResultsTable teams={teams} matchMap={matchMap} onEdit={startEdit} />
+      <MatchResultsTable
+        teams={teams}
+        matchMap={matchMap}
+        onEdit={startEdit}
+        onOpenHeyatate={openHeyatate}
+      />
 
       {editing && (
         <MatchInputModal
@@ -139,6 +154,13 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
           onCancel={handleCancel}
         />
       )}
+      {heyatateTeam && (
+        <HeyatateModal
+          leagueId={leagueId}
+          team={heyatateTeam}
+          onClose={closeHeyatate}
+        />
+      )}
     </div>
   );
 }
@@ -147,10 +169,12 @@ const MatchResultsTable = memo(function MatchResultsTable({
   teams,
   matchMap,
   onEdit,
+  onOpenHeyatate,
 }: {
   teams: Team[];
   matchMap: Map<string, Match>;
   onEdit: (homeTeam: Team, awayTeam: Team) => void;
+  onOpenHeyatate: (team: Team) => void;
 }) {
   const mismatchCount = countMismatchedPairs(teams, matchMap);
   return (
@@ -197,12 +221,23 @@ const MatchResultsTable = memo(function MatchResultsTable({
             {teams.map((selfTeam) => (
               <tr key={selfTeam.id} className="border-t border-line/50">
                 <td className="sticky left-0 z-10 whitespace-nowrap bg-ink-3 p-2 text-xs font-medium text-fg">
-                  <TeamColorDot
-                    color={selfTeam.color}
-                    size="sm"
-                    className="mr-1 align-middle"
-                  />
-                  {selfTeam.name}
+                  <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-2">
+                    <div>
+                      <TeamColorDot
+                        color={selfTeam.color}
+                        size="sm"
+                        className="mr-1 align-middle"
+                      />
+                      {selfTeam.name}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenHeyatate(selfTeam)}
+                      className="self-center text-[10px] font-normal text-cyan-300 underline decoration-cyan-400/50 underline-offset-2 transition hover:text-cyan-200"
+                    >
+                      ヘヤタテ
+                    </button>
+                  </div>
                 </td>
                 {teams.map((opponentTeam) => {
                   if (selfTeam.id === opponentTeam.id) {

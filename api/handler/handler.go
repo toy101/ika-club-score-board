@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"ika-club-score-board/api/gen"
@@ -339,7 +342,7 @@ func (h *Handler) CreateTeam(ctx context.Context, req gen.CreateTeamRequestObjec
 }
 
 func (h *Handler) GetTeam(ctx context.Context, req gen.GetTeamRequestObject) (gen.GetTeamResponseObject, error) {
-	team, err := h.fetchTeam(ctx, req.TeamId)
+	team, err := h.fetchTeamInLeague(ctx, req.LeagueId, req.TeamId)
 	if err != nil {
 		if isNotFound(err) {
 			return gen.GetTeam404JSONResponse{notFoundResp("team not found")}, nil
@@ -350,7 +353,7 @@ func (h *Handler) GetTeam(ctx context.Context, req gen.GetTeamRequestObject) (ge
 }
 
 func (h *Handler) UpdateTeam(ctx context.Context, req gen.UpdateTeamRequestObject) (gen.UpdateTeamResponseObject, error) {
-	team, err := h.fetchTeam(ctx, req.TeamId)
+	_, err := h.fetchTeamInLeague(ctx, req.LeagueId, req.TeamId)
 	if err != nil {
 		if isNotFound(err) {
 			return gen.UpdateTeam404JSONResponse{notFoundResp("team not found")}, nil
@@ -359,21 +362,37 @@ func (h *Handler) UpdateTeam(ctx context.Context, req gen.UpdateTeamRequestObjec
 	}
 
 	body := req.Body
+	var assignments []string
+	var args []any
 	if body.Name != nil {
-		team.Name = *body.Name
+		assignments = append(assignments, "name=?")
+		args = append(args, *body.Name)
 	}
 	if body.Color != nil {
-		team.Color = *body.Color
+		assignments = append(assignments, "color=?")
+		args = append(args, *body.Color)
 	}
 	if body.SortOrder != nil {
-		team.SortOrder = *body.SortOrder
+		assignments = append(assignments, "sort_order=?")
+		args = append(args, *body.SortOrder)
+	}
+	if body.RoomUrl != nil {
+		roomURL, err := normalizeRoomURL(*body.RoomUrl)
+		if err != nil {
+			return gen.UpdateTeam422JSONResponse{unprocessableResp(err.Error())}, nil
+		}
+		assignments = append(assignments, "room_url=?")
+		args = append(args, roomURL)
 	}
 
-	if _, err := h.db.ExecContext(ctx,
-		`UPDATE teams SET name=?, color=?, sort_order=? WHERE id=?`,
-		team.Name, team.Color, team.SortOrder, req.TeamId,
-	); err != nil {
-		return nil, err
+	if len(assignments) > 0 {
+		args = append(args, req.TeamId, req.LeagueId)
+		if _, err := h.db.ExecContext(ctx,
+			`UPDATE teams SET `+strings.Join(assignments, ", ")+` WHERE id=? AND league_id=?`,
+			args...,
+		); err != nil {
+			return nil, err
+		}
 	}
 
 	if body.Members != nil {
@@ -390,7 +409,7 @@ func (h *Handler) UpdateTeam(ctx context.Context, req gen.UpdateTeamRequestObjec
 		}
 	}
 
-	updated, err := h.fetchTeam(ctx, req.TeamId)
+	updated, err := h.fetchTeamInLeague(ctx, req.LeagueId, req.TeamId)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +575,7 @@ func (h *Handler) fetchLeague(ctx context.Context, id string) (gen.League, error
 
 func (h *Handler) fetchTeams(ctx context.Context, leagueID string) ([]gen.Team, error) {
 	rows, err := h.db.QueryContext(ctx,
-		`SELECT id, name, color, sort_order FROM teams WHERE league_id=? ORDER BY sort_order`, leagueID)
+		`SELECT id, name, color, sort_order, room_url FROM teams WHERE league_id=? ORDER BY sort_order`, leagueID)
 	if err != nil {
 		return nil, err
 	}
@@ -565,9 +584,11 @@ func (h *Handler) fetchTeams(ctx context.Context, leagueID string) ([]gen.Team, 
 	var teams []gen.Team
 	for rows.Next() {
 		var t gen.Team
-		if err := rows.Scan(&t.Id, &t.Name, &t.Color, &t.SortOrder); err != nil {
+		var roomURL string
+		if err := rows.Scan(&t.Id, &t.Name, &t.Color, &t.SortOrder, &roomURL); err != nil {
 			return nil, err
 		}
+		t.RoomUrl = &roomURL
 		members, err := h.fetchMembers(ctx, t.Id)
 		if err != nil {
 			return nil, err
@@ -583,18 +604,53 @@ func (h *Handler) fetchTeams(ctx context.Context, leagueID string) ([]gen.Team, 
 
 func (h *Handler) fetchTeam(ctx context.Context, teamID string) (gen.Team, error) {
 	var t gen.Team
+	var roomURL string
 	err := h.db.QueryRowContext(ctx,
-		`SELECT id, name, color, sort_order FROM teams WHERE id=?`, teamID,
-	).Scan(&t.Id, &t.Name, &t.Color, &t.SortOrder)
+		`SELECT id, name, color, sort_order, room_url FROM teams WHERE id=?`, teamID,
+	).Scan(&t.Id, &t.Name, &t.Color, &t.SortOrder, &roomURL)
 	if err != nil {
 		return gen.Team{}, err
 	}
+	t.RoomUrl = &roomURL
 	members, err := h.fetchMembers(ctx, teamID)
 	if err != nil {
 		return gen.Team{}, err
 	}
 	t.Members = members
 	return t, nil
+}
+
+func (h *Handler) fetchTeamInLeague(ctx context.Context, leagueID, teamID string) (gen.Team, error) {
+	var t gen.Team
+	var roomURL string
+	err := h.db.QueryRowContext(ctx,
+		`SELECT id, name, color, sort_order, room_url FROM teams WHERE id=? AND league_id=?`, teamID, leagueID,
+	).Scan(&t.Id, &t.Name, &t.Color, &t.SortOrder, &roomURL)
+	if err != nil {
+		return gen.Team{}, err
+	}
+	t.RoomUrl = &roomURL
+	members, err := h.fetchMembers(ctx, teamID)
+	if err != nil {
+		return gen.Team{}, err
+	}
+	t.Members = members
+	return t, nil
+}
+
+func normalizeRoomURL(raw string) (string, error) {
+	if strings.Contains(raw, `\`) || strings.IndexFunc(raw, unicode.IsControl) >= 0 {
+		return "", errors.New("roomUrl must be a valid Nintendo room URL")
+	}
+	roomURL := strings.TrimSpace(raw)
+	if roomURL == "" {
+		return "", nil
+	}
+	parsed, err := url.ParseRequestURI(roomURL)
+	if err != nil || parsed.Opaque != "" || parsed.Scheme != "https" || parsed.Host != "s.nintendo.com" || parsed.User != nil || parsed.Path == "" || parsed.Path == "/" {
+		return "", errors.New("roomUrl must start with https://s.nintendo.com/ and include a path")
+	}
+	return roomURL, nil
 }
 
 func (h *Handler) fetchMembers(ctx context.Context, teamID string) ([]gen.Member, error) {

@@ -438,6 +438,10 @@ components:
           minimum: 1
           description: 表示順
           example: 1
+        roomUrl:
+          type: string
+          description: ヘヤタテリンク。未登録時は空文字
+          example: "https://s.nintendo.com/example"
         members:
           type: array
           minItems: 4
@@ -486,6 +490,10 @@ components:
           minimum: 1
           description: 表示順
           example: 2
+        roomUrl:
+          type: string
+          description: ヘヤタテリンク。空文字で登録解除
+          example: "https://s.nintendo.com/example"
         members:
           type: array
           minItems: 4

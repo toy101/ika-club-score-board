@@ -13,3 +13,15 @@ SELECT id, scoring_mode, best_of, points_per_game_win FROM leagues;
 ```
 
 既存行は `match_points`, `3`, `1` になる。マイグレーションを再実行すると列の重複で失敗するため、適用履歴を管理して重複実行しない。
+
+## 002_add_team_room_url.sql
+
+1. 対象DBをバックアップする。
+2. API 更新前に `002_add_team_room_url.sql` を対象DBへ1回だけ適用する。
+3. 次のクエリで既存チームのヘヤタテリンクが未登録になっていることを確認する。
+
+```sql
+SELECT id, room_url FROM teams;
+```
+
+既存行の `room_url` は空文字になる。マイグレーションを再実行すると列の重複で失敗するため、適用履歴を管理して重複実行しない。

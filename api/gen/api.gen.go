@@ -178,6 +178,9 @@ type Team struct {
 	// Name チーム名
 	Name string `json:"name"`
 
+	// RoomUrl ヘヤタテリンク。未登録時は空文字
+	RoomUrl *string `json:"roomUrl,omitempty"`
+
 	// SortOrder 表示順
 	SortOrder int `json:"sortOrder"`
 }
@@ -204,6 +207,9 @@ type TeamUpdateRequest struct {
 
 	// Name チーム名
 	Name *string `json:"name,omitempty"`
+
+	// RoomUrl ヘヤタテリンク。空文字で登録解除
+	RoomUrl *string `json:"roomUrl,omitempty"`
 
 	// SortOrder 表示順
 	SortOrder *int `json:"sortOrder,omitempty"`

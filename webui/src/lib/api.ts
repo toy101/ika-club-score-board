@@ -5,6 +5,7 @@ import type {
   Match,
   MatchCreateRequest,
   MatchUpdateRequest,
+  Team,
 } from "@/types/league";
 
 export type ApiError = {
@@ -88,6 +89,25 @@ export function updateLeague(
   return request<League>(`/leagues/${leagueId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function getTeam(
+  leagueId: string,
+  teamId: string,
+  signal?: AbortSignal,
+): Promise<Team> {
+  return request<Team>(`/leagues/${leagueId}/teams/${teamId}`, { signal });
+}
+
+export function updateTeamRoomUrl(
+  leagueId: string,
+  teamId: string,
+  roomUrl: string,
+): Promise<Team> {
+  return request<Team>(`/leagues/${leagueId}/teams/${teamId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ roomUrl }),
   });
 }
 
