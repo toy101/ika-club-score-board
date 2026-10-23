@@ -86,6 +86,23 @@ describe("useMatches refresh", () => {
     expect(result.current.matches).toEqual([updated]);
   });
 
+  it("applies the saved response and ignores an in-flight stale fetch", async () => {
+    const { result } = renderHook(() => useMatches("league-a"));
+    await waitFor(() => expect(result.current.matches).toEqual([match]));
+    const timestamp = result.current.lastUpdatedAt;
+    const stale = deferred<Match[]>();
+    vi.mocked(listMatches).mockReturnValueOnce(stale.promise);
+    act(() => { void result.current.refetch(); });
+    const signal = vi.mocked(listMatches).mock.calls.at(-1)?.[1];
+    const saved = { ...match, homeScore: 5 };
+    act(() => { result.current.applySavedMatch(saved); });
+    expect(signal?.aborted).toBe(true);
+    expect(result.current.matches).toEqual([saved]);
+    expect(result.current.lastUpdatedAt).toBe(timestamp);
+    await act(async () => { stale.resolve([match]); });
+    expect(result.current.matches).toEqual([saved]);
+  });
+
   it("resets data for a different league and ignores the old league response", async () => {
     const { result, rerender } = renderHook(({ id }) => useMatches(id), {
       initialProps: { id: "league-a" },

@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createMatch, listMatches } from "@/lib/api";
+import { createMatch, listMatches, updateMatch } from "@/lib/api";
 import type { Match, RankingRule, Team } from "@/types/league";
 import MatchMatrix from "./MatchMatrix";
 
@@ -89,6 +89,40 @@ describe("MatchMatrix result refresh", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(self).toHaveValue(7);
     expect(opponent).toHaveValue(4);
+  });
+
+  it("closes and shows the saved score without waiting for a slow refresh", async () => {
+    mount();
+    await screen.findByText("⏳ 相手待ち");
+    fireEvent.click(screen.getByText("⏳ 相手待ち"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Alphaのスコア" }), {
+      target: { value: "5" },
+    });
+    const saved = { ...mine, homeScore: 5 };
+    vi.mocked(updateMatch).mockResolvedValueOnce(saved);
+    let resolveRefresh!: (matches: Match[]) => void;
+    vi.mocked(listMatches).mockReturnValueOnce(new Promise((resolve) => {
+      resolveRefresh = resolve;
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "更新する" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("結果を更新中…")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("⏳ 相手待ち"));
+    expect(screen.getByRole("spinbutton", { name: "Alphaのスコア" })).toHaveValue(5);
+    await act(async () => { resolveRefresh([saved]); });
+  });
+
+  it("keeps the draft open and permits retry when saving fails", async () => {
+    mount();
+    await screen.findByText("⏳ 相手待ち");
+    fireEvent.click(screen.getByText("⏳ 相手待ち"));
+    vi.mocked(updateMatch).mockRejectedValueOnce(new Error("save failed"));
+    fireEvent.click(screen.getByRole("button", { name: "更新する" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("save failed");
+    expect(screen.getByRole("spinbutton", { name: "Alphaのスコア" })).toHaveValue(3);
+    expect(screen.getByRole("button", { name: "更新する" })).toBeEnabled();
+    expect(listMatches).toHaveBeenCalledTimes(1);
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 
   it("reports refresh failure separately after a successful score save", async () => {

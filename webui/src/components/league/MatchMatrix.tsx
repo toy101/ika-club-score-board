@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Team, RankingRule } from "@/types/league";
+import type { Match, Team, RankingRule } from "@/types/league";
 import { createMatch, updateMatch } from "@/lib/api";
 import {
   buildMatchMap,
@@ -14,6 +14,8 @@ import MatchCell from "./MatchCell";
 import { TeamColorDot } from "./TeamColorDot";
 import MatchInputModal from "./MatchInputModal";
 import RankingTable from "./RankingTable";
+
+const MemoizedRankingTable = memo(RankingTable);
 
 type Props = {
   leagueId: string;
@@ -28,47 +30,45 @@ type EditingTarget = {
 
 export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
   const router = useRouter();
-  const { matches, refreshing, lastUpdatedAt, refreshError, refetch } =
+  const { matches, refreshing, lastUpdatedAt, refreshError, refetch, applySavedMatch } =
     useMatches(leagueId);
   const [editing, setEditing] = useState<EditingTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const matchMap = buildMatchMap(matches);
-  const mismatchCount = countMismatchedPairs(teams, matchMap);
+  const savingRef = useRef(false);
+  const matchMap = useMemo(() => buildMatchMap(matches), [matches]);
 
-  function startEdit(homeTeam: Team, awayTeam: Team) {
+  const startEdit = useCallback((homeTeam: Team, awayTeam: Team) => {
     setError(null);
     setEditing({ homeTeam, awayTeam });
-  }
+  }, []);
 
   async function handleSave(homeScore: number, awayScore: number) {
-    if (!editing) return;
+    if (!editing || savingRef.current) return;
+    savingRef.current = true;
     const existingMatch = matchMap.get(
       `${editing.homeTeam.id}:${editing.awayTeam.id}`,
     );
     setSaving(true);
     setError(null);
     try {
-      if (existingMatch) {
-        await updateMatch(leagueId, existingMatch.id, {
-          homeScore,
-          awayScore,
-        });
-      } else {
-        await createMatch(leagueId, {
-          homeTeamId: editing.homeTeam.id,
-          awayTeamId: editing.awayTeam.id,
-          homeScore,
-          awayScore,
-        });
-      }
-      await refetch();
+      const savedMatch = existingMatch
+        ? await updateMatch(leagueId, existingMatch.id, { homeScore, awayScore })
+        : await createMatch(leagueId, {
+            homeTeamId: editing.homeTeam.id,
+            awayTeamId: editing.awayTeam.id,
+            homeScore,
+            awayScore,
+          });
+      applySavedMatch(savedMatch);
       setEditing(null);
+      void refetch();
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存に失敗したよ〜");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
@@ -122,93 +122,9 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
           </p>
         )}
       </div>
-      <RankingTable teams={teams} matches={matches} rankingRule={rankingRule} />
+      <MemoizedRankingTable teams={teams} matches={matches} rankingRule={rankingRule} />
 
-      <section className="space-y-3">
-        <h2 className="flex items-center gap-2 px-1 text-sm font-bold text-fg">
-          <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
-          対戦結果マトリクス
-        </h2>
-
-        {mismatchCount > 0 && (
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-            <p className="text-sm font-bold text-amber-300">
-              ⚠ {mismatchCount}件のスコア不一致があるよ〜
-            </p>
-            <p className="mt-0.5 text-xs text-amber-300/80">
-              オレンジのセルを確認・修正してね〜
-            </p>
-          </div>
-        )}
-
-        <div className="overflow-x-auto rounded-2xl border border-line bg-ink-2">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-10 min-w-[80px] border-b border-line bg-ink-3 p-2 text-left font-mono text-[10px] uppercase tracking-wider font-normal text-fg-3">
-                  self / vs
-                </th>
-                {teams.map((t) => (
-                  <th
-                    key={t.id}
-                    className="min-w-[80px] whitespace-nowrap border-b border-line bg-ink-3 p-2 text-center text-xs font-medium text-fg"
-                  >
-                    <TeamColorDot
-                      color={t.color}
-                      size="sm"
-                      className="mr-1 align-middle"
-                    />
-                    {t.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {teams.map((selfTeam) => (
-                <tr key={selfTeam.id} className="border-t border-line/50">
-                  <td className="sticky left-0 z-10 whitespace-nowrap bg-ink-3 p-2 text-xs font-medium text-fg">
-                    <TeamColorDot
-                      color={selfTeam.color}
-                      size="sm"
-                      className="mr-1 align-middle"
-                    />
-                    {selfTeam.name}
-                  </td>
-                  {teams.map((opponentTeam) => {
-                    if (selfTeam.id === opponentTeam.id) {
-                      return (
-                        <td
-                          key={opponentTeam.id}
-                          className="bg-ink-1/60 p-2 text-center"
-                        >
-                          <span className="text-base text-fg-3">―</span>
-                        </td>
-                      );
-                    }
-
-                    const status = getCellStatus(
-                      selfTeam.id,
-                      opponentTeam.id,
-                      matchMap,
-                    );
-                    return (
-                      <MatchCell
-                        key={opponentTeam.id}
-                        status={status}
-                        onClick={() => startEdit(selfTeam, opponentTeam)}
-                      />
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <p className="px-1 text-xs text-fg-3">
-          セルをタップして対戦結果を申告。自チームと相手チームの申告が一致したら確定するよ〜
-        </p>
-      </section>
+      <MatchResultsTable teams={teams} matchMap={matchMap} onEdit={startEdit} />
 
       {editing && (
         <MatchInputModal
@@ -226,3 +142,102 @@ export default function MatchMatrix({ leagueId, teams, rankingRule }: Props) {
     </div>
   );
 }
+
+const MatchResultsTable = memo(function MatchResultsTable({
+  teams,
+  matchMap,
+  onEdit,
+}: {
+  teams: Team[];
+  matchMap: Map<string, Match>;
+  onEdit: (homeTeam: Team, awayTeam: Team) => void;
+}) {
+  const mismatchCount = countMismatchedPairs(teams, matchMap);
+  return (
+    <section className="space-y-3">
+      <h2 className="flex items-center gap-2 px-1 text-sm font-bold text-fg">
+        <span className="h-4 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
+        対戦結果マトリクス
+      </h2>
+
+      {mismatchCount > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm font-bold text-amber-300">
+            ⚠ {mismatchCount}件のスコア不一致があるよ〜
+          </p>
+          <p className="mt-0.5 text-xs text-amber-300/80">
+            オレンジのセルを確認・修正してね〜
+          </p>
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-2xl border border-line bg-ink-2">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 min-w-[80px] border-b border-line bg-ink-3 p-2 text-left font-mono text-[10px] uppercase tracking-wider font-normal text-fg-3">
+                self / vs
+              </th>
+              {teams.map((t) => (
+                <th
+                  key={t.id}
+                  className="min-w-[80px] whitespace-nowrap border-b border-line bg-ink-3 p-2 text-center text-xs font-medium text-fg"
+                >
+                  <TeamColorDot
+                    color={t.color}
+                    size="sm"
+                    className="mr-1 align-middle"
+                  />
+                  {t.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map((selfTeam) => (
+              <tr key={selfTeam.id} className="border-t border-line/50">
+                <td className="sticky left-0 z-10 whitespace-nowrap bg-ink-3 p-2 text-xs font-medium text-fg">
+                  <TeamColorDot
+                    color={selfTeam.color}
+                    size="sm"
+                    className="mr-1 align-middle"
+                  />
+                  {selfTeam.name}
+                </td>
+                {teams.map((opponentTeam) => {
+                  if (selfTeam.id === opponentTeam.id) {
+                    return (
+                      <td
+                        key={opponentTeam.id}
+                        className="bg-ink-1/60 p-2 text-center"
+                      >
+                        <span className="text-base text-fg-3">―</span>
+                      </td>
+                    );
+                  }
+
+                  const status = getCellStatus(
+                    selfTeam.id,
+                    opponentTeam.id,
+                    matchMap,
+                  );
+                  return (
+                    <MatchCell
+                      key={opponentTeam.id}
+                      status={status}
+                      onClick={() => onEdit(selfTeam, opponentTeam)}
+                    />
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="px-1 text-xs text-fg-3">
+        セルをタップして対戦結果を申告。自チームと相手チームの申告が一致したら確定するよ〜
+      </p>
+    </section>
+  );
+});
