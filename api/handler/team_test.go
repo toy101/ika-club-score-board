@@ -48,6 +48,9 @@ func TestListTeams_Success(t *testing.T) {
 		if len(team.Members) != 4 {
 			t.Fatalf("team[%d]: expected 4 members, got %d", i, len(team.Members))
 		}
+		if team.RoomUrl == nil || *team.RoomUrl != "" {
+			t.Fatalf("team[%d]: expected empty roomUrl, got %#v", i, team.RoomUrl)
+		}
 	}
 }
 
@@ -181,6 +184,28 @@ func TestGetTeam_Success(t *testing.T) {
 	}
 	if len(r.Members) != 4 {
 		t.Fatalf("expected 4 members, got %d", len(r.Members))
+	}
+	if r.RoomUrl == nil || *r.RoomUrl != "" {
+		t.Fatalf("expected empty roomUrl, got %#v", r.RoomUrl)
+	}
+}
+
+func TestGetTeam_RejectsTeamFromAnotherLeague(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	seedLeague(t, db, "another-league", []string{"another-team-1", "another-team-2"})
+
+	resp, err := h.GetTeam(ctx, gen.GetTeamRequestObject{
+		LeagueId: testLeagueID,
+		TeamId:   "another-team-1",
+	})
+	if err != nil {
+		t.Fatalf("GetTeam error: %v", err)
+	}
+	if _, ok := resp.(gen.GetTeam404JSONResponse); !ok {
+		t.Fatalf("expected GetTeam404JSONResponse, got %T", resp)
 	}
 }
 
@@ -358,6 +383,147 @@ func TestUpdateTeam_MembersNil_Unchanged(t *testing.T) {
 	}
 	if count != 4 {
 		t.Fatalf("expected 4 members in DB, got %d", count)
+	}
+}
+
+func TestUpdateTeam_RoomURLOnlyPreservesOtherFields(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	roomURL := "  https://s.nintendo.com/room/example?code=123  "
+	resp, err := h.UpdateTeam(ctx, gen.UpdateTeamRequestObject{
+		LeagueId: testLeagueID,
+		TeamId:   testTeamID1,
+		Body:     &gen.TeamUpdateRequest{RoomUrl: &roomURL},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTeam error: %v", err)
+	}
+	r, ok := resp.(gen.UpdateTeam200JSONResponse)
+	if !ok {
+		t.Fatalf("expected UpdateTeam200JSONResponse, got %T", resp)
+	}
+	if r.RoomUrl == nil || *r.RoomUrl != "https://s.nintendo.com/room/example?code=123" {
+		t.Fatalf("unexpected roomUrl: %#v", r.RoomUrl)
+	}
+	if r.Name != "Team1" || r.Color != "#ff0000" || r.SortOrder != 1 {
+		t.Fatalf("unrelated fields changed: %#v", r)
+	}
+	if len(r.Members) != 4 || r.Members[0].Name != "Member1-1" {
+		t.Fatalf("members changed: %#v", r.Members)
+	}
+
+	getResp, err := h.GetTeam(ctx, gen.GetTeamRequestObject{
+		LeagueId: testLeagueID,
+		TeamId:   testTeamID1,
+	})
+	if err != nil {
+		t.Fatalf("GetTeam error: %v", err)
+	}
+	got, ok := getResp.(gen.GetTeam200JSONResponse)
+	if !ok || got.RoomUrl == nil || *got.RoomUrl != "https://s.nintendo.com/room/example?code=123" {
+		t.Fatalf("roomUrl was not persisted: %#v", getResp)
+	}
+}
+
+func TestUpdateTeam_EmptyRoomURLDeletesRegistration(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	if _, err := db.Exec(`UPDATE teams SET room_url=? WHERE id=?`, "https://s.nintendo.com/room/example", testTeamID1); err != nil {
+		t.Fatalf("seed room_url: %v", err)
+	}
+	empty := ""
+	resp, err := h.UpdateTeam(ctx, gen.UpdateTeamRequestObject{
+		LeagueId: testLeagueID,
+		TeamId:   testTeamID1,
+		Body:     &gen.TeamUpdateRequest{RoomUrl: &empty},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTeam error: %v", err)
+	}
+	r, ok := resp.(gen.UpdateTeam200JSONResponse)
+	if !ok || r.RoomUrl == nil || *r.RoomUrl != "" {
+		t.Fatalf("expected empty roomUrl, got %#v", resp)
+	}
+}
+
+func TestUpdateTeam_OmittedRoomURLPreservesRegistration(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	wantRoomURL := "https://s.nintendo.com/room/example"
+	if _, err := db.Exec(`UPDATE teams SET room_url=? WHERE id=?`, wantRoomURL, testTeamID1); err != nil {
+		t.Fatalf("seed room_url: %v", err)
+	}
+	name := "Changed"
+	resp, err := h.UpdateTeam(ctx, gen.UpdateTeamRequestObject{
+		LeagueId: testLeagueID,
+		TeamId:   testTeamID1,
+		Body:     &gen.TeamUpdateRequest{Name: &name},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTeam error: %v", err)
+	}
+	r, ok := resp.(gen.UpdateTeam200JSONResponse)
+	if !ok || r.RoomUrl == nil || *r.RoomUrl != wantRoomURL {
+		t.Fatalf("expected roomUrl to be preserved, got %#v", resp)
+	}
+}
+
+func TestUpdateTeam_RejectsInvalidRoomURL(t *testing.T) {
+	tests := []string{
+		"http://s.nintendo.com/room/example",
+		"https://evil.example/room/example",
+		"https://s.nintendo.com.evil.example/room/example",
+		"https://user@s.nintendo.com/room/example",
+		"https://s.nintendo.com:443/room/example",
+		"https://s.nintendo.com/",
+		"https://s.nintendo.com\\@evil.example/room/example",
+		"https://s.nintendo.com/room/\nexample",
+		"https://s.nintendo.com/room/example\n",
+	}
+
+	for _, roomURL := range tests {
+		t.Run(roomURL, func(t *testing.T) {
+			h, db := newTestHandler(t)
+			seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+
+			resp, err := h.UpdateTeam(context.Background(), gen.UpdateTeamRequestObject{
+				LeagueId: testLeagueID,
+				TeamId:   testTeamID1,
+				Body:     &gen.TeamUpdateRequest{RoomUrl: &roomURL},
+			})
+			if err != nil {
+				t.Fatalf("UpdateTeam error: %v", err)
+			}
+			if _, ok := resp.(gen.UpdateTeam422JSONResponse); !ok {
+				t.Fatalf("expected UpdateTeam422JSONResponse, got %T", resp)
+			}
+		})
+	}
+}
+
+func TestUpdateTeam_RejectsTeamFromAnotherLeague(t *testing.T) {
+	h, db := newTestHandler(t)
+	ctx := context.Background()
+
+	seedLeague(t, db, testLeagueID, []string{testTeamID1, testTeamID2})
+	seedLeague(t, db, "another-league", []string{"another-team-1", "another-team-2"})
+	roomURL := "https://s.nintendo.com/room/example"
+	resp, err := h.UpdateTeam(ctx, gen.UpdateTeamRequestObject{
+		LeagueId: testLeagueID,
+		TeamId:   "another-team-1",
+		Body:     &gen.TeamUpdateRequest{RoomUrl: &roomURL},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTeam error: %v", err)
+	}
+	if _, ok := resp.(gen.UpdateTeam404JSONResponse); !ok {
+		t.Fatalf("expected UpdateTeam404JSONResponse, got %T", resp)
 	}
 }
 

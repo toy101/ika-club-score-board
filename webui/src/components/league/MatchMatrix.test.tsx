@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createMatch, listMatches, updateMatch } from "@/lib/api";
+import { createMatch, getTeam, listMatches, updateMatch, updateTeamRoomUrl } from "@/lib/api";
 import type { Match, RankingRule, Team } from "@/types/league";
 import MatchMatrix from "./MatchMatrix";
 
@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/api", () => ({
   listMatches: vi.fn(), createMatch: vi.fn(), updateMatch: vi.fn(),
+  getTeam: vi.fn(), updateTeamRoomUrl: vi.fn(),
 }));
 
 const teams: Team[] = ["Alpha", "Beta"].map((name, index): Team => ({
@@ -39,9 +40,27 @@ function alphaRankingRow() {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(listMatches).mockResolvedValue([mine]);
+  vi.mocked(getTeam).mockImplementation(async (_leagueId, teamId) =>
+    teams.find((team) => team.id === teamId)!,
+  );
+  vi.mocked(updateTeamRoomUrl).mockImplementation(async (_leagueId, teamId, roomUrl) => ({
+    ...teams.find((team) => team.id === teamId)!,
+    roomUrl,
+  }));
 });
 
 describe("MatchMatrix result refresh", () => {
+  it("opens the selected SELF team's Heyatate modal", async () => {
+    mount();
+
+    const buttons = screen.getAllByRole("button", { name: "ヘヤタテ" });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[1]);
+
+    expect(await screen.findByRole("dialog", { name: "Betaのヘヤタテ" })).toBeInTheDocument();
+    expect(getTeam).toHaveBeenCalledWith("league-a", "Beta", expect.any(AbortSignal));
+  });
+
   it("updates pending, mismatch and confirmed status together with ranking", async () => {
     mount();
     await screen.findByText("⏳ 相手待ち");

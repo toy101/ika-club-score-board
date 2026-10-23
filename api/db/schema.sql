@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS teams (
     league_id  TEXT    NOT NULL REFERENCES leagues(id) ON DELETE CASCADE,
     name       TEXT    NOT NULL,
     color      TEXT    NOT NULL,
-    sort_order INTEGER NOT NULL DEFAULT 1
+    sort_order INTEGER NOT NULL DEFAULT 1,
+    room_url   TEXT    NOT NULL DEFAULT ''
 );
 
 -- members テーブル

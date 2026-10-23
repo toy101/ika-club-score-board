@@ -22,6 +22,7 @@ export type Team = {
   color: string;
   sortOrder: number;
   members: [Member, Member, Member, Member];
+  roomUrl?: string;
 };
 
 export type TeamInput = {
